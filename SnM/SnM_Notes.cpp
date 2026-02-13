@@ -243,12 +243,7 @@ void NotesWnd::OnInitDlg() {
   HIMAGELIST hImgList = ImageList_Create(1, 34, ILC_COLOR, 1, 0);
   ListView_SetImageList(actorListHwnd, hImgList, LVSIL_SMALL);
 #else
-  int style = 0x0001 /*LVS_REPORT*/ | 0x0004 /*LVS_SINGLESEL*/ |
-      0x4000 /*LVS_NOCOLUMNHEADER*/ | 0x8000 /*LVS_NOSORTHEADER*/;
-  SWELL_MakeSetCurParms(1.0, 1.0, 0.0, 0.0, m_hwnd, false, false);
-  HWND actorListHwnd = SWELL_MakeControl("", 0, "SysListView32", style, 0, 0, 150, 200, 0);
-  ListView_SetExtendedListViewStyleEx(actorListHwnd, LVS_EX_FULLROWSELECT, LVS_EX_FULLROWSELECT);
-  SWELL_MakeSetCurParms(1.0, 1.0, 0.0, 0.0, NULL, false, false);
+  HWND actorListHwnd = GetDlgItem(m_hwnd, IDC_LIST3);
 #endif
   m_actorListView = new ActorListView(actorListHwnd, NULL);
   m_pLists.Add(m_actorListView);

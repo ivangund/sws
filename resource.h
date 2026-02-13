@@ -321,6 +321,7 @@
 #define IDC_DRAGSCALE                   1230
 #define IDC_LIST1                       1231
 #define IDC_LIST2                       1232
+#define IDC_LIST3                       1233
 #define IDC_PROGRESS                    1234
 #define IDC_GROUP1                      1236
 #define IDC_GROUP2                      1237
