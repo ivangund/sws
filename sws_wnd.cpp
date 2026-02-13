@@ -545,6 +545,7 @@ LRESULT SWS_DockWnd::screensetCallback(int action,
 int SWS_DockWnd::keyHandler(MSG *msg, accelerator_register_t *ctx) {
   SWS_DockWnd * p = (SWS_DockWnd *) ctx->user;
   if (p &&p
+  
   ->
   IsActive(true)
   )
@@ -1856,6 +1857,25 @@ bool ListView_HookThemeColorsMessage(HWND hwndDlg,
               break;
           }
       }
+#endif
+#ifndef _WIN32
+    case WM_NOTIFY:
+      if (lParam && listView) {
+        NMHDR *hdr = (NMHDR *) lParam;
+        if (hdr->idFrom == listID && hdr->code == NM_CUSTOMDRAW) {
+          LPNMLVCUSTOMDRAW lplvcd = (LPNMLVCUSTOMDRAW) lParam;
+          if (lplvcd->nmcd.dwDrawStage == CDDS_ITEMPREPAINT) {
+            SWS_ListItem *item = listView->GetListItem((int) lplvcd->nmcd.dwItemSpec);
+            int iCol = listView->DisplayToDataCol(lplvcd->iSubItem);
+            COLORREF textColor;
+            if (item && listView->GetCustomColumnColor(item, iCol, false, &textColor)) {
+              lplvcd->clrText = textColor;
+              return true;
+            }
+          }
+        }
+      }
+      break;
 #endif
   }
   return false;

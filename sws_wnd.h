@@ -132,6 +132,12 @@ class SWS_ListView {
     virtual bool CustomDrawItem(HDC hdc, SWS_ListItem *item, int iCol, RECT *r, bool selected) {
       return false;
     }
+    virtual bool GetCustomColumnColor(SWS_ListItem *item,
+                                      int iCol,
+                                      bool selected,
+                                      COLORREF *textColor) {
+      return false;
+    }
 
   protected:
     void EditListItem(int iIndex, int iCol);

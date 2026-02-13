@@ -2256,6 +2256,34 @@ bool ActorListView::CustomDrawItem(HDC hdc, SWS_ListItem *item, int iCol, RECT *
   return true;
 }
 
+bool ActorListView::GetCustomColumnColor(SWS_ListItem *item,
+                                         int iCol,
+                                         bool selected,
+                                         COLORREF *textColor) {
+  if (!item || !textColor)
+    return false;
+
+  ActorListItem *actorItem = (ActorListItem *) item;
+  if (!actorItem || !actorItem->actor)
+    return false;
+
+  if (iCol == COL_NAME) {
+    int sz;
+    ColorTheme *ctheme = (ColorTheme *) GetColorThemeStruct(&sz);
+    int color = actorItem->actor->GetEffectiveColor();
+    if (color) {
+      *textColor = color & 0xFFFFFF;
+      return true;
+    }
+    if (ctheme && sz >= (int) sizeof(ColorTheme)) {
+      *textColor = ctheme->region & 0xFFFFFF;
+      return true;
+    }
+  }
+
+  return false;
+}
+
 bool ImportAssFile(const char *_fn) {
   bool ok = false;
   double firstPos = -1.0;

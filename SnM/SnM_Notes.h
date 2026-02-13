@@ -140,6 +140,10 @@ class ActorListView: public SWS_ListView {
     ActorListView(HWND hwndList, HWND hwndEdit);
     bool HideGridLines() override { return true; }
     bool CustomDrawItem(HDC hdc, SWS_ListItem *item, int iCol, RECT *r, bool selected);
+    bool GetCustomColumnColor(SWS_ListItem *item,
+                              int iCol,
+                              bool selected,
+                              COLORREF *textColor) override;
 
   protected:
     void GetItemText(SWS_ListItem *item, int iCol, char *str, int iStrMax);
