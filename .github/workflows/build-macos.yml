@@ -14,7 +14,7 @@ on:
 
 jobs:
   build:
-    runs-on: ${{ inputs.arch == 'arm64' && 'macos-14' || 'macos-13' }}
+    runs-on: macos-15
     env:
       ARCH: ${{ inputs.arch }}
 
