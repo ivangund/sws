@@ -54,10 +54,10 @@
 
 #ifdef __APPLE__
 #define _SNM_SWELL_ISSUES // workaround some SWELL issues
-                          // last test: WDL d1d8d2 - Dec. 20 2012
-                          // - native font rendering won't draw multiple lines
-                          // - missing EN_CHANGE msg, see SnM_Notes.cpp
-                          // - EN_SETFOCUS, EN_KILLFOCUS not supported yet
+// last test: WDL d1d8d2 - Dec. 20 2012
+// - native font rendering won't draw multiple lines
+// - missing EN_CHANGE msg, see SnM_Notes.cpp
+// - EN_SETFOCUS, EN_KILLFOCUS not supported yet
 #endif
 
 #define _SNM_NO_ASYNC_UPDT		// disable async UI updates (seems ok on Win, unstable on OSX)
@@ -73,7 +73,6 @@
 
 #define SNM_FORMATED_INI_FILE      "%s\\S&M.ini"
 #define SNM_OLD_FORMATED_INI_FILE  "%s\\Plugins\\S&M.ini"
-#define SNM_ACTION_HELP_INI_FILE   "%s\\S&M_Action_help_en.ini"
 #define SNM_CYCLACTION_INI_FILE    "%s\\S&M_Cyclactions.ini"
 #define SNM_CYCLACTION_BAK_FILE    "%s\\S&M_Cyclactions.bak"
 #define SNM_CYCLACTION_EXPORT_FILE "%s\\S&M_Cyclactions_export.ini"
@@ -92,7 +91,6 @@
 
 #define SNM_FORMATED_INI_FILE      "%s/S&M.ini"
 #define SNM_OLD_FORMATED_INI_FILE  "%s/Plugins/S&M.ini"
-#define SNM_ACTION_HELP_INI_FILE   "%s/S&M_Action_help_en.ini"
 #define SNM_CYCLACTION_INI_FILE    "%s/S&M_Cyclactions.ini"
 #define SNM_CYCLACTION_BAK_FILE    "%s/S&M_Cyclactions.bak"
 #define SNM_CYCLACTION_EXPORT_FILE "%s/S&M_Cyclactions_export.ini"
@@ -121,11 +119,14 @@
 #define SNM_MKR_RGN_UPDATE_FREQ    500  // gentle value (ms) not to stress REAPER
 #define SNM_OFFSCREEN_UPDATE_FREQ  1000	// gentle value (ms) not to stress REAPER
 #define SNM_DEF_TOOLBAR_RFRSH_FREQ 300  // default frequency in ms for the "auto-refresh toolbars" option 
+
 #define SNM_FUDGE_FACTOR           0.0000000001
 #define SNM_CSURF_EXT_UNREGISTER   0x00016666
 #define SNM_REAPER_IMG_EXTS        "png,pcx,jpg,jpeg,jfif,ico,bmp" // img exts supported by REAPER (v4.32), can't get those at runtime yet
+
 #define SNM_INI_EXT_LIST           "INI files (*.INI)\0*.INI\0All Files\0*.*\0"
-#define SNM_SUB_EXT_LIST           "SubRip subtitle files (*.SRT)\0*.SRT\0"
+#define SNM_SUB_EXT_LIST           "Subtitle files (*.SRT;*.ASS)\0*.SRT;*.ASS\0SubRip (*.SRT)\0*.SRT\0Advanced SubStation Alpha (*.ASS)\0*.ASS\0"
+#define SNM_ROLES_EXT_LIST         "Ролёвка ReNotes (*.roles)\0*.roles\0"
 #define SNM_TXT_EXT_LIST           "Text files (*.txt)\0*.txt\0All files (*.*)\0*.*\0"
 
 #define SNM_MARKER_MASK            1
@@ -158,6 +159,7 @@
 #define SNM_MAX_MARKER_NAME_LEN    64     // + regions
 #define SNM_MAX_TRACK_NAME_LEN     128
 #define SNM_MAX_PRESET_NAME_LEN    SNM_MAX_PATH // vst3 presets can be full filenames (.vstpreset files)
+
 #define SNM_MAX_FX_NAME_LEN        128
 #define SNM_MAX_OSC_MSG_LEN        256
 
@@ -207,32 +209,34 @@ extern bool g_SNM_ToolbarRefresh, g_SNM_ExtSubmenu;
 
 
 class SNM_TrackInt {
-public:
-	SNM_TrackInt(MediaTrack* _tr, int _i) : m_tr(_tr), m_int(_i) {}
-	~SNM_TrackInt() {}
-	MediaTrack* m_tr;
-	int m_int;
+  public:
+    SNM_TrackInt(MediaTrack *_tr, int _i) : m_tr(_tr), m_int(_i) {
+    }
+    ~SNM_TrackInt() {
+    }
+    MediaTrack *m_tr;
+    int m_int;
 };
 
 // unsigned chars are enough ATM..
 typedef struct DYN_COMMAND_T {
-	const char* desc;
-	const char* id;
-	void (*doCommand)(COMMAND_T*);
-	unsigned char count;
-	unsigned char max;
-	int (*getEnabled)(COMMAND_T*);
-	int uniqueSectionId;
-	void(*onAction)(COMMAND_T*, int, int, int, HWND);
+  const char *desc;
+  const char *id;
+  void (*doCommand)(COMMAND_T *);
+  unsigned char count;
+  unsigned char max;
+  int (*getEnabled)(COMMAND_T *);
+  int uniqueSectionId;
+  void (*onAction)(COMMAND_T *, int, int, int, HWND);
 
-	bool Register(const int slot) const;
+  bool Register(const int slot) const;
 } DYN_COMMAND_T;
 
 typedef struct SECTION_INFO_T {
-	int unique_id;
-	const char* ca_cust_id;
-	const char* ca_ini_sec;
-	const char* fallback_name;
+  int unique_id;
+  const char *ca_cust_id;
+  const char *ca_ini_sec;
+  const char *fallback_name;
 } SECTION_INFO_T;
 
 
@@ -249,9 +253,11 @@ enum {
   SNM_SCHEDJOB_NOTES_UPDATE,
   SNM_SCHEDJOB_SEL_PRJ,
   SNM_SCHEDJOB_TRIG_PRESET,
-  SNM_SCHEDJOB_RES_ATTACH = SNM_SCHEDJOB_TRIG_PRESET + SNM_PRESETS_NB_FX + 1, // +1 for the "selected fx" preset action
+  SNM_SCHEDJOB_RES_ATTACH = SNM_SCHEDJOB_TRIG_PRESET + SNM_PRESETS_NB_FX + 1,
+  // +1 for the "selected fx" preset action
   SNM_SCHEDJOB_PLAYLIST_UPDATE,
-  SNM_SCHEDJOB_OSX_FIX	//JFB!! removeme some day, due to _SNM_SWELL_ISSUES/missing EN_CHANGE messages
+  SNM_SCHEDJOB_OSX_FIX
+  //JFB!! removeme some day, due to _SNM_SWELL_ISSUES/missing EN_CHANGE messages
 };
 
 #define SNM_SCHEDJOB_DEFAULT_DELAY    250
@@ -270,70 +276,81 @@ enum {
 // if you need to process all intermediate values before jobs are performed, 
 // just override Init() - which is called once when the job is actually 
 // added to the processing queue.
-class ScheduledJob
-{
-public:
-	// _approxMs==0 means "to be performed immediately" (not added to the processing queue)
-	ScheduledJob(int _id, int _approxMs)
-		: m_id(_id),m_approxMs(_approxMs),m_scheduled(false),m_time(GetTickCount()+_approxMs) {}
-	virtual ~ScheduledJob() {}
+class ScheduledJob {
+  public:
+    // _approxMs==0 means "to be performed immediately" (not added to the processing queue)
+    ScheduledJob(int _id, int _approxMs)
+      : m_id(_id), m_approxMs(_approxMs), m_scheduled(false), m_time(GetTickCount() + _approxMs) {
+    }
+    virtual ~ScheduledJob() {
+    }
 
-	static void Schedule(ScheduledJob* _job);
-	static void Run(); // polled from the main thread via SNM_CSurfRun()
+    static void Schedule(ScheduledJob *_job);
+    static void Run(); // polled from the main thread via SNM_CSurfRun()
 
-	// not safe to make anything public: 1-jobs are auto-deleted, 2-Init() may not have been called
+    // not safe to make anything public: 1-jobs are auto-deleted, 2-Init() may not have been called
 
-protected:
-	virtual void Perform() {}
-	virtual void Init(ScheduledJob* _replacedJob = NULL) {}
-	bool IsImmediate() { return m_approxMs==0; }
-	int m_id, m_approxMs; // really approx since Run() is called on timer
+  protected:
+    virtual void Perform() {
+    }
+    virtual void Init(ScheduledJob *_replacedJob = NULL) {
+    }
+    bool IsImmediate() { return m_approxMs == 0; }
+    int m_id, m_approxMs; // really approx since Run() is called on timer
 
-private:
-	void InitSafe(ScheduledJob* _replacedJob = NULL) { if (!m_scheduled) Init(_replacedJob); m_scheduled=true; }
-	void PerformSafe() { InitSafe(); Perform(); }
-	bool m_scheduled;
-	DWORD m_time;
+  private:
+    void InitSafe(ScheduledJob *_replacedJob = NULL) {
+      if (!m_scheduled) Init(_replacedJob);
+      m_scheduled = true;
+    }
+    void PerformSafe() {
+      InitSafe();
+      Perform();
+    }
+    bool m_scheduled;
+    DWORD m_time;
 };
 
 
-class MidiOscActionJob : public ScheduledJob
-{
-public:
-	MidiOscActionJob(int _jobId, int _approxMs, int _val, int _valhw, int _relmode) 
-		: ScheduledJob(_jobId, _approxMs),m_val(_val),m_valhw(_valhw),m_relmode(_relmode),m_absval(0.0)
-	{
-		// can't call pure virtual funcs in constructor, this is where C++ sucks
-		// => Init() will do the job later on..
-	}
-protected:
-	virtual void Init(ScheduledJob* _replacedJob = NULL);
-	double GetValue() { return m_absval; }
-	int GetIntValue() { return int(0.5+GetValue()); }
+class MidiOscActionJob: public ScheduledJob {
+  public:
+    MidiOscActionJob(int _jobId, int _approxMs, int _val, int _valhw, int _relmode)
+      : ScheduledJob(_jobId, _approxMs), m_val(_val), m_valhw(_valhw), m_relmode(_relmode),
+        m_absval(0.0) {
+      // can't call pure virtual funcs in constructor, this is where C++ sucks
+      // => Init() will do the job later on..
+    }
 
-	// pure virtual callbacks, see MidiOscActionJob::Init()
-	virtual double GetCurrentValue() = 0;
-	virtual double GetMinValue() = 0;
-	virtual double GetMaxValue() = 0;
-	int m_val, m_valhw, m_relmode; // values from the controller
-private:
-	int AdjustRelative(int _adjmode, int _reladj);
-	double m_absval; // internal absolute value
+  protected:
+    virtual void Init(ScheduledJob *_replacedJob = NULL);
+    double GetValue() { return m_absval; }
+    int GetIntValue() { return int(0.5 + GetValue()); }
+
+    // pure virtual callbacks, see MidiOscActionJob::Init()
+    virtual double GetCurrentValue() = 0;
+    virtual double GetMinValue() = 0;
+    virtual double GetMaxValue() = 0;
+    int m_val, m_valhw, m_relmode; // values from the controller
+  private:
+    int AdjustRelative(int _adjmode, int _reladj);
+    double m_absval; // internal absolute value
 };
 
 
 // avoid undo points flooding (i.e. async undo => handle with care!)
-class UndoJob : public ScheduledJob
-{
-public:
-	UndoJob(const char* _desc, int _flags, int _tr = -1) 
-		: ScheduledJob(SNM_SCHEDJOB_UNDO, SNM_SCHEDJOB_DEFAULT_DELAY), 
-			m_desc(_desc), m_flags(_flags), m_tr(_tr) {}
-protected:
-	void Perform() { Undo_OnStateChangeEx2(NULL, m_desc, m_flags, m_tr); }
-private:
-	const char* m_desc;
-	int m_flags, m_tr;
+class UndoJob: public ScheduledJob {
+  public:
+    UndoJob(const char *_desc, int _flags, int _tr = -1)
+      : ScheduledJob(SNM_SCHEDJOB_UNDO, SNM_SCHEDJOB_DEFAULT_DELAY),
+        m_desc(_desc), m_flags(_flags), m_tr(_tr) {
+    }
+
+  protected:
+    void Perform() { Undo_OnStateChangeEx2(NULL, m_desc, m_flags, m_tr); }
+
+  private:
+    const char *m_desc;
+    int m_flags, m_tr;
 };
 
 
@@ -343,7 +360,7 @@ private:
 
 // section indexes
 enum {
-  SNM_SEC_IDX_MAIN=0,
+  SNM_SEC_IDX_MAIN = 0,
   SNM_SEC_IDX_MAIN_ALT,
   SNM_SEC_IDX_EXPLORER,
   SNM_SEC_IDX_ME,
@@ -365,17 +382,17 @@ const SECTION_INFO_T *SNM_GetActionSectionInfo(int _idx);
 // Common funcs
 ///////////////////////////////////////////////////////////////////////////////
 
-int SNM_Init(reaper_plugin_info_t* _rec);
+int SNM_Init(reaper_plugin_info_t *_rec);
 void SNM_Exit();
 
-bool SNM_GetActionName(const char* _custId, WDL_FastString* _nameOut, int _slot = -1);
-int GetFakeToggleState(COMMAND_T*);
+bool SNM_GetActionName(const char *_custId, WDL_FastString *_nameOut, int _slot = -1);
+int GetFakeToggleState(COMMAND_T *);
 
-DYN_COMMAND_T *FindDynamicAction(void (*doCommand)(COMMAND_T*));
+DYN_COMMAND_T *FindDynamicAction(void (*doCommand)(COMMAND_T *));
 
-static void freecharptr(char* _p) { FREE_NULL(_p); }
-static void deleteintptr(int* _p) { DELETE_NULL(_p); }
-static void deletefaststrptr(WDL_FastString* _p) { DELETE_NULL(_p); }
+static void freecharptr(char *_p) { FREE_NULL(_p); }
+static void deleteintptr(int *_p) { DELETE_NULL(_p); }
+static void deletefaststrptr(WDL_FastString *_p) { DELETE_NULL(_p); }
 
 /* commented: replaced with a global SWS_CMD_SHORTNAME()
  #define SNM_CMD_SHORTNAME(_ct) (GetLocalizedActionName(_ct->id, _ct->accel.desc) + 9) // +9 to skip "SWS/S&M: "

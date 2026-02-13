@@ -38,183 +38,184 @@
 static HWND s_hwndAbout;
 static bool s_isPackaged;
 
-bool IsOfficialVersion()
-{
-	return (_stricmp(SWS_VERSION_TYPE, "Featured") == 0); // otherwise: pre-release, beta, etc
+bool IsOfficialVersion() {
+  return (_stricmp(SWS_VERSION_TYPE, "Featured") == 0); // otherwise: pre-release, beta, etc
 }
 
-void WhatsNew(COMMAND_T*)
-{
-	ShellExecute(GetMainHwnd(), "open", IsOfficialVersion() ? SWS_URL_WHATSNEW : SWS_URL_BETA_WHATSNEW, NULL, NULL, SW_SHOWNORMAL);
+void WhatsNew(COMMAND_T *) {
+  ShellExecute(GetMainHwnd(),
+               "open",
+               IsOfficialVersion() ? SWS_URL_WHATSNEW : SWS_URL_BETA_WHATSNEW,
+               NULL,
+               NULL,
+               SW_SHOWNORMAL);
 }
 
-INT_PTR WINAPI doAbout(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-	if (INT_PTR r = SNM_HookThemeColorsMessage(hwndDlg, uMsg, wParam, lParam))
-		return r;
+INT_PTR WINAPI doAbout(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+  if (INT_PTR r = SNM_HookThemeColorsMessage(hwndDlg, uMsg, wParam, lParam))
+    return r;
 
-	switch(uMsg)
-	{
-		case WM_INITDIALOG:
-		{
-			char cVersion[256];
-			snprintf(cVersion, sizeof(cVersion),
+  switch (uMsg) {
+    case WM_INITDIALOG: {
+      char cVersion[256];
+      snprintf(cVersion,
+               sizeof(cVersion),
 #ifdef GIT_BRANCH
-					"%s %d.%d.%d.%d %s (%s)",
+               "%s %d.%d.%d.%d %s (%s) (ReNotes)",
 #else
-					"%s %d.%d.%d.%d %s",
+               "%s %d.%d.%d.%d %s (ReNotes)",
 #endif
-				__LOCALIZE("Version","sws_DLG_109"), SWS_VERSION, GIT_COMMIT
+               __LOCALIZE("Version", "sws_DLG_109"),
+               SWS_VERSION,
+               GIT_COMMIT
 #ifdef GIT_BRANCH
 				, GIT_BRANCH
 #endif
-			);
-			char *p=strstr(cVersion, " #0");
-			if (p) *p=0;
+      );
+      char *p = strstr(cVersion, " #0");
+      if (p) *p = 0;
 
-			char cVersionDate[256];
-			snprintf(cVersionDate, sizeof(cVersionDate), __LOCALIZE_VERFMT("%s built on %s","sws_DLG_109"), cVersion, __DATE__);
+      char cVersionDate[256];
+      snprintf(cVersionDate,
+               sizeof(cVersionDate),
+               __LOCALIZE_VERFMT("%s built on %s", "sws_DLG_109"),
+               cVersion,
+               __DATE__);
 
-			SetWindowText(GetDlgItem(hwndDlg, IDC_VERSION), cVersionDate);
-			SetWindowText(GetDlgItem(hwndDlg, IDC_WEBSITE), SWS_URL);
-			SetWindowText(GetDlgItem(hwndDlg, IDC_EDIT), LICENSE_AUTHORS "\r\n" LICENSE_TEXT);
+      SetWindowText(GetDlgItem(hwndDlg, IDC_VERSION), cVersionDate);
+      SetWindowText(GetDlgItem(hwndDlg, IDC_WEBSITE), SWS_URL);
+      SetWindowText(GetDlgItem(hwndDlg, IDC_EDIT), LICENSE_AUTHORS "\r\n" LICENSE_TEXT);
 
-			if (s_isPackaged)
-			{
-				constexpr int controls[] { IDC_CHECK1, IDC_CHECK2, IDC_FILTERGROUP, IDC_UPDATE };
-				for (const int control : controls)
-					ShowWindow(GetDlgItem(hwndDlg, control), SW_HIDE);
+      if (s_isPackaged) {
+        constexpr int controls[]{IDC_CHECK1, IDC_CHECK2, IDC_FILTERGROUP, IDC_UPDATE};
+        for (const int control: controls)
+          ShowWindow(GetDlgItem(hwndDlg, control), SW_HIDE);
 
-				RECT wndRect, groupBoxRect;
-				GetWindowRect(hwndDlg, &wndRect);
-				GetClientRect(GetDlgItem(hwndDlg, IDC_FILTERGROUP), &groupBoxRect);
-				SetWindowPos(hwndDlg, nullptr, 0, 0, wndRect.right - wndRect.left,
-					(wndRect.bottom - wndRect.top) - (groupBoxRect.bottom - groupBoxRect.top),
-					SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOZORDER);
-			}
-			else
-			{
-				bool official, beta; GetStartupSearchOptions(&official, &beta, NULL);
-				CheckDlgButton(hwndDlg, IDC_CHECK1, official);
-				CheckDlgButton(hwndDlg, IDC_CHECK2, beta);
-			}
+        RECT wndRect, groupBoxRect;
+        GetWindowRect(hwndDlg, &wndRect);
+        GetClientRect(GetDlgItem(hwndDlg, IDC_FILTERGROUP), &groupBoxRect);
+        SetWindowPos(hwndDlg,
+                     nullptr,
+                     0,
+                     0,
+                     wndRect.right - wndRect.left,
+                     (wndRect.bottom - wndRect.top) - (groupBoxRect.bottom - groupBoxRect.top),
+                     SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOZORDER);
+      } else {
+        bool official, beta;
+        GetStartupSearchOptions(&official, &beta, NULL);
+        CheckDlgButton(hwndDlg, IDC_CHECK1, official);
+        CheckDlgButton(hwndDlg, IDC_CHECK2, beta);
+      }
 
-			s_hwndAbout = hwndDlg;
-			ShowWindow(hwndDlg, SW_SHOW);
-			break;
-		}
-		case WM_DESTROY:
-			s_hwndAbout = NULL;
-			break;
-		case WM_DRAWITEM:
-		{
-			DRAWITEMSTRUCT *di = (DRAWITEMSTRUCT *)lParam;
-			if (di->CtlType == ODT_BUTTON) 
-			{
-				if (SWS_THEMING)
-				{
-					if (di->itemState & ODS_SELECTED)
-						SetTextColor(di->hDC, RGB(0,0,0));
-				}
-				else
-					SetTextColor(di->hDC, (di->itemState & ODS_SELECTED) ? RGB(0,0,0) : RGB(0,0,220));
+      s_hwndAbout = hwndDlg;
+      ShowWindow(hwndDlg, SW_SHOW);
+      break;
+    }
+    case WM_DESTROY:
+      s_hwndAbout = NULL;
+      break;
+    case WM_DRAWITEM: {
+      DRAWITEMSTRUCT *di = (DRAWITEMSTRUCT *) lParam;
+      if (di->CtlType == ODT_BUTTON) {
+        if (SWS_THEMING) {
+          if (di->itemState & ODS_SELECTED)
+            SetTextColor(di->hDC, RGB(0, 0, 0));
+        } else
+          SetTextColor(di->hDC, (di->itemState & ODS_SELECTED) ? RGB(0, 0, 0) : RGB(0, 0, 220));
 
-				RECT r = di->rcItem;
-				char buf[512];
-				GetWindowText(di->hwndItem, buf, sizeof(buf));
-				DrawText(di->hDC, buf, -1, &r, DT_NOPREFIX | DT_LEFT | DT_VCENTER);
-			}
-			break;
-		}
-		case WM_COMMAND:
-		{
-			if (wParam == IDC_WEBSITE)
-			{
-				char cLink[512];
-				GetDlgItemText(hwndDlg, (int)wParam, cLink, 512);
-				ShellExecute(hwndDlg, "open", cLink , NULL, NULL, SW_SHOWNORMAL);
-			}
-			else if (wParam == IDC_INFO)
-				WhatsNew(NULL);
-			else if (wParam == IDC_UPDATE)
-				VersionCheckDialog(hwndDlg);
-			else if (wParam == IDCANCEL) {
-				SetStartupSearchOptions(!!IsDlgButtonChecked(hwndDlg, IDC_CHECK1), !!IsDlgButtonChecked(hwndDlg, IDC_CHECK2), 0);
-				DestroyWindow(hwndDlg);
-			}
-			break;
-		}
-	}
-	return 0;
+        RECT r = di->rcItem;
+        char buf[512];
+        GetWindowText(di->hwndItem, buf, sizeof(buf));
+        DrawText(di->hDC, buf, -1, &r, DT_NOPREFIX | DT_LEFT | DT_VCENTER);
+      }
+      break;
+    }
+    case WM_COMMAND: {
+      if (wParam == IDC_WEBSITE) {
+        char cLink[512];
+        GetDlgItemText(hwndDlg, (int) wParam, cLink, 512);
+        ShellExecute(hwndDlg, "open", cLink, NULL, NULL, SW_SHOWNORMAL);
+      } else if (wParam == IDC_INFO)
+        WhatsNew(NULL);
+      else if (wParam == IDC_UPDATE)
+        VersionCheckDialog(hwndDlg);
+      else if (wParam == IDCANCEL) {
+        SetStartupSearchOptions(!!IsDlgButtonChecked(hwndDlg, IDC_CHECK1),
+                                !!IsDlgButtonChecked(hwndDlg, IDC_CHECK2),
+                                0);
+        DestroyWindow(hwndDlg);
+      }
+      break;
+    }
+  }
+  return 0;
 }
 
-void OpenAboutBox(COMMAND_T*)
-{
-	if (s_hwndAbout)
-		DestroyWindow(s_hwndAbout);
-	else 
-		CreateDialog(g_hInst, MAKEINTRESOURCE(IDD_ABOUT), g_hwndParent, doAbout);
+void OpenAboutBox(COMMAND_T *) {
+  if (s_hwndAbout)
+    DestroyWindow(s_hwndAbout);
+  else
+    CreateDialog(g_hInst, MAKEINTRESOURCE(IDD_ABOUT), g_hwndParent, doAbout);
 }
 
-int IsAboutBoxOpen(COMMAND_T*) {
-	return (s_hwndAbout != NULL);
+int IsAboutBoxOpen(COMMAND_T *) {
+  return (s_hwndAbout != NULL);
 }
 
 //!WANT_LOCALIZE_1ST_STRING_BEGIN:sws_actions
-static COMMAND_T g_commandTable[] = 
+static COMMAND_T g_commandTable[] =
 {
-	{ { DEFACCEL, "SWS: About" }, "SWS_ABOUT", OpenAboutBox, "About SWS Extensions", 0, IsAboutBoxOpen, },
-	{ { DEFACCEL, "SWS/S&M: What's new..." }, "S&M_WHATSNEW", WhatsNew, },
-	{ {}, LAST_COMMAND, }, // Denote end of table
+  {{DEFACCEL, "SWS: About"}, "SWS_ABOUT", OpenAboutBox, "About SWS Extensions", 0, IsAboutBoxOpen,},
+  {{DEFACCEL, "SWS/S&M: What's new..."}, "S&M_WHATSNEW", WhatsNew,},
+  {{}, LAST_COMMAND,}, // Denote end of table
 };
 static COMMAND_T g_legacyInstallCmds[] =
 {
-	{ { DEFACCEL, "SWS/BR: Check for new SWS version..." }, "BR_VERSION_CHECK", VersionCheckAction, },
-	{ {}, LAST_COMMAND, },
+  {{DEFACCEL, "SWS/BR: Check for new SWS version..."}, "BR_VERSION_CHECK", VersionCheckAction,},
+  {{}, LAST_COMMAND,},
 };
 //!WANT_LOCALIZE_1ST_STRING_END
 
-int AboutBoxInit()
-{
-	SWSRegisterCommands(g_commandTable);
-	return 1;
+int AboutBoxInit() {
+  SWSRegisterCommands(g_commandTable);
+  return 1;
 }
 
-static bool IsFromReaPack()
-{
+static bool IsFromReaPack() {
 #ifdef _WIN32
-	HMODULE dll;
-	if (!GetModuleHandleExW(
-			GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
-			GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-			reinterpret_cast<LPCWSTR>(&PackageInit), &dll))
-		return false;
+  HMODULE dll;
+  if (!GetModuleHandleExW(
+    GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+    GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+    reinterpret_cast<LPCWSTR>(&PackageInit),
+    &dll))
+    return false;
 
-	char filename[MAX_PATH];
-	GetModuleFileNameUTF8(dll, filename, sizeof(filename));
+  char filename[MAX_PATH];
+  GetModuleFileNameUTF8(dll, filename, sizeof(filename));
 #else
-	Dl_info info;
-	if (!dladdr(reinterpret_cast<const void *>(&PackageInit), &info))
-		return false;
-	const char *filename { info.dli_fname };
+  Dl_info info;
+  if (!dladdr(reinterpret_cast<const void *>(&PackageInit), &info))
+    return false;
+  const char *filename{info.dli_fname};
 #endif
 
-	// v1 API
-	ReaPack_PackageEntry *entry;
-	if (ReaPack_GetOwner && ReaPack_FreeEntry && (entry = ReaPack_GetOwner(filename, nullptr, 0)))
-	{
-		ReaPack_FreeEntry(entry);
-		return true;
-	}
+  // v1 API
+  ReaPack_PackageEntry *entry;
+  if (ReaPack_GetOwner && ReaPack_FreeEntry &&(entry = ReaPack_GetOwner(filename, nullptr, 0))
+  )
+  {
+    ReaPack_FreeEntry(entry);
+    return true;
+  }
 
-	return false;
+  return false;
 }
 
-void PackageInit()
-{
-	if ((s_isPackaged = IsFromReaPack()))
-		return;
+void PackageInit() {
+  if ((s_isPackaged = IsFromReaPack()))
+    return;
 
-	SWSRegisterCommands(g_legacyInstallCmds);
-	VersionCheckInitExit(true);
+  s_isPackaged = true;
 }
