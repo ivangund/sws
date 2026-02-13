@@ -1540,8 +1540,16 @@ void NotesWnd::Update(bool _force) {
   if (_force || refreshType == REQUEST_REFRESH)
     RefreshGUI();
 
-  if (g_notesType == SNM_NOTES_RGN_SUB)
-    RefreshActorList();
+  if (g_notesType == SNM_NOTES_RGN_SUB) {
+    static WDL_PtrList_DOD<SNM_Actor> *s_lastActorPtr = nullptr;
+    static int s_lastActorCount = -1;
+    WDL_PtrList_DOD<SNM_Actor> *actors = g_actors.Get();
+    if (_force || actors != s_lastActorPtr || actors->GetSize() != s_lastActorCount) {
+      s_lastActorPtr = actors;
+      s_lastActorCount = actors->GetSize();
+      RefreshActorList();
+    }
+  }
 
   sRecurseCheck = false;
 }
