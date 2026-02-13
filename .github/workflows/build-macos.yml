@@ -1,0 +1,45 @@
+name: Build macOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: Architecture
+        required: true
+        type: choice
+        default: arm64
+        options:
+          - arm64
+          - x86_64
+
+jobs:
+  build:
+    runs-on: ${{ inputs.arch == 'arm64' && 'macos-14' || 'macos-13' }}
+    env:
+      ARCH: ${{ inputs.arch }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: brew install php
+
+      - name: Configure
+        run: |
+          DEPLOY_TARGET=$( [ "$ARCH" = "arm64" ] && echo "11.0" || echo "10.13" )
+
+          mkdir build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DNO_INSTALL_PREFIX=YES \
+            -DCMAKE_OSX_ARCHITECTURES=$ARCH \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=$DEPLOY_TARGET
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Upload plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: reaper_sws-${{ inputs.arch }}-macos
+          path: build/reaper_sws*.dylib
