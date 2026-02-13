@@ -1015,12 +1015,12 @@ HMENU NotesWnd::OnContextMenu(int x, int y, bool *wantDefaultItems) {
         }
       }
       AddToMenu(hMenu,
-                __LOCALIZE("Все ✓", "sws_DLG_152"),
+                __LOCALIZE("Все (+)", "sws_DLG_152"),
                 ENABLE_ALL_MSG,
                 -1,
                 false);
       AddToMenu(hMenu,
-                __LOCALIZE("Все 🗙", "sws_DLG_152"),
+                __LOCALIZE("Все (-)", "sws_DLG_152"),
                 DISABLE_ALL_MSG,
                 -1,
                 false);
@@ -2067,10 +2067,22 @@ void ActorListView::GetItemText(SWS_ListItem *item, int iCol, char *str, int iSt
 
   switch (iCol) {
     case COL_ENABLED:
+#ifdef _WIN32
       lstrcpyn(str, actor->IsEnabled() ? UTF8_CHECKMARK : "", iStrMax);
+#else
+      lstrcpyn(str, actor->IsEnabled() ? "+" : "-", iStrMax);
+#endif
       break;
     case COL_NAME:
+#ifdef _WIN32
       lstrcpyn(str, actor->GetName(), iStrMax);
+#else
+      if (actor->HasLinkedActor()) {
+        snprintf(str, iStrMax, "[%s] %s", actor->GetLinkedActorName(), actor->GetName());
+      } else {
+        lstrcpyn(str, actor->GetName(), iStrMax);
+      }
+#endif
       break;
     default:
       str[0] = 0;
