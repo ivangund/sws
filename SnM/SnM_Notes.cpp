@@ -225,6 +225,7 @@ void NotesWnd::OnInitDlg() {
   m_parentVwnd.AddChild(&m_btnClearSubs);
 
 
+#ifdef _WIN32
   HWND actorListHwnd = CreateWindowEx(0,
                                       WC_LISTVIEW,
                                       "",
@@ -241,6 +242,14 @@ void NotesWnd::OnInitDlg() {
   ListView_SetExtendedListViewStyle(actorListHwnd, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
   HIMAGELIST hImgList = ImageList_Create(1, 34, ILC_COLOR, 1, 0);
   ListView_SetImageList(actorListHwnd, hImgList, LVSIL_SMALL);
+#else
+  int style = LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS |
+      LVS_NOCOLUMNHEADER | LVS_NOSORTHEADER;
+  SWELL_MakeSetCurParms(1.0, 1.0, 0.0, 0.0, m_hwnd, false, false);
+  HWND actorListHwnd = SWELL_MakeControl("", 0, "SysListView32", style, 0, 0, 150, 200, 0);
+  ListView_SetExtendedListViewStyleEx(actorListHwnd, LVS_EX_FULLROWSELECT, LVS_EX_FULLROWSELECT);
+  SWELL_MakeSetCurParms(1.0, 1.0, 0.0, 0.0, NULL, false, false);
+#endif
   m_actorListView = new ActorListView(actorListHwnd, NULL);
   m_pLists.Add(m_actorListView);
 
@@ -262,11 +271,13 @@ void NotesWnd::OnDestroy() {
   /* see OnTimer()
       UnregisterToMarkerRegionUpdates(&m_mkrRgnListener);
   */
+#ifdef _WIN32
   if (m_actorListView) {
     HIMAGELIST hImgList = ListView_GetImageList(m_actorListView->GetHWND(), LVSIL_SMALL);
     if (hImgList)
       ImageList_Destroy(hImgList);
   }
+#endif
   g_prevNotesType = -1;
   m_cbType.Empty();
   m_cbRegion.Empty();
