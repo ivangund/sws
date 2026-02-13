@@ -1162,13 +1162,14 @@ void NotesWnd::OnResize() {
     HWND listHwnd = m_actorListView->GetHWND();
     int listBottom = r.bottom - 16;
     int rightMargin = SNM_GUI_X_MARGIN;
+    ShowWindow(listHwnd, SW_SHOWNA);
     SetWindowPos(listHwnd,
                  NULL,
                  r.right - panelWidth - rightMargin,
                  SNM_GUI_TOP_H,
                  panelWidth,
                  listBottom - SNM_GUI_TOP_H,
-                 SWP_SHOWWINDOW);
+                 SWP_NOZORDER);
     int vscrollWidth = GetSystemMetrics(SM_CXVSCROLL);
     ListView_SetColumnWidth(listHwnd, 0, 26);
     ListView_SetColumnWidth(listHwnd, 1, panelWidth - 26 - vscrollWidth);
