@@ -200,13 +200,13 @@ void NotesWnd::OnInitDlg() {
 
   m_cbType.SetID(CMBID_TYPE);
   m_cbType.SetFont(font);
-  m_cbType.AddItem(__LOCALIZE("Заметки дорожки", "sws_DLG_152"));
-  m_cbType.AddItem(__LOCALIZE("Заметки айтема", "sws_DLG_152"));
-  m_cbType.AddItem(__LOCALIZE("Заметки проекта", "sws_DLG_152"));
-  m_cbType.AddItem(__LOCALIZE("Доп. заметки проекта", "sws_DLG_152"));
-  m_cbType.AddItem(__LOCALIZE("Глобальные заметки", "sws_DLG_152"));
+  m_cbType.AddItem(__LOCALIZE("Track notes", "sws_DLG_152"));
+  m_cbType.AddItem(__LOCALIZE("Item notes", "sws_DLG_152"));
+  m_cbType.AddItem(__LOCALIZE("Project notes", "sws_DLG_152"));
+  m_cbType.AddItem(__LOCALIZE("Extra project notes", "sws_DLG_152"));
+  m_cbType.AddItem(__LOCALIZE("Global notes", "sws_DLG_152"));
   m_cbType.AddItem("<SEP>");
-  m_cbType.AddItem(__LOCALIZE("Субтитры", "sws_DLG_152"));
+  m_cbType.AddItem(__LOCALIZE("Subtitles", "sws_DLG_152"));
   m_parentVwnd.AddChild(&m_cbType);
   // ...the selected item is set through SetType() below
 
@@ -672,7 +672,7 @@ static void CopyMarkersToClipboard(HWND hwnd) {
     CF_SetClipboard(output.Get());
   else
     MessageBox(hwnd,
-               __LOCALIZE("Нет маркеров внутри регионов.", "sws_DLG_152"),
+               __LOCALIZE("No markers inside regions.", "sws_DLG_152"),
                __LOCALIZE("ReNotes", "sws_DLG_152"),
                MB_OK);
 
@@ -691,8 +691,8 @@ static WDL_DLGRET LinkActorDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARA
   switch (uMsg) {
     case WM_INITDIALOG: {
       SetWindowLongPtr(hwndDlg, GWLP_USERDATA, lParam);
-      SetDlgItemText(hwndDlg, -1, __LOCALIZE("Имя актёра:", "sws_DLG_152"));
-      SetDlgItemText(hwndDlg, IDCANCEL, __LOCALIZE("Отменить", "sws_DLG_152"));
+      SetDlgItemText(hwndDlg, -1, __LOCALIZE("Actor's name:", "sws_DLG_152"));
+      SetDlgItemText(hwndDlg, IDCANCEL, __LOCALIZE("Cancel", "sws_DLG_152"));
       HWND combo = GetDlgItem(hwndDlg, IDC_COMBO);
       WDL_UTF8_HookComboBox(combo);
       WDL_PtrList_DOD<SNM_Actor> *actors = g_actors.Get();
@@ -806,7 +806,7 @@ void NotesWnd::OnCommand(WPARAM wParam, LPARAM lParam) {
 
       if (!linkedNames.GetSize()) {
         MessageBox(GetHWND(),
-                   __LOCALIZE("Нет привязанных актёров.", "sws_DLG_152"),
+                   __LOCALIZE("No linked actors.", "sws_DLG_152"),
                    __LOCALIZE("ReNotes", "sws_DLG_152"),
                    MB_OK);
         break;
@@ -922,14 +922,14 @@ void NotesWnd::OnCommand(WPARAM wParam, LPARAM lParam) {
       }
       if (!hasData) {
         MessageBox(m_hwnd,
-                   __LOCALIZE("Ничего не найдено для экспорта.", "sws_DLG_152"),
+                   __LOCALIZE("Nothing to export.", "sws_DLG_152"),
                    __LOCALIZE("ReNotes", "sws_DLG_152"),
                    MB_OK);
         break;
       }
       char fn[SNM_MAX_PATH] = "";
       if (BrowseForSaveFile(
-        __LOCALIZE("ReNotes - Экспортировать ролёвку", "sws_DLG_152"),
+        __LOCALIZE("ReNotes - Export role file", "sws_DLG_152"),
         g_lastRolesFn,
         NULL,
         SNM_ROLES_EXT_LIST,
@@ -938,15 +938,15 @@ void NotesWnd::OnCommand(WPARAM wParam, LPARAM lParam) {
         lstrcpyn(g_lastRolesFn, fn, sizeof(g_lastRolesFn));
         if (!ExportRolesFile(fn))
           MessageBox(m_hwnd,
-                     __LOCALIZE("Не удалось экспортировать ролёвку.", "sws_DLG_152"),
-                     __LOCALIZE("ReNotes - Ошибка", "sws_DLG_152"),
+                     __LOCALIZE("Failed to export the role file.", "sws_DLG_152"),
+                     __LOCALIZE("ReNotes - Error", "sws_DLG_152"),
                      MB_OK);
       }
     }
     break;
     case IMPORT_ROLES_MSG:
       if (char *fn = BrowseForFiles(
-        __LOCALIZE("ReNotes - Импортировать ролёвку", "sws_DLG_152"),
+        __LOCALIZE("ReNotes - Import role file", "sws_DLG_152"),
         g_lastRolesFn,
         NULL,
         false,
@@ -960,8 +960,8 @@ void NotesWnd::OnCommand(WPARAM wParam, LPARAM lParam) {
           MarkProjectDirty(NULL);
         } else
           MessageBox(m_hwnd,
-                     __LOCALIZE("Не удалось импортировать ролёвку.", "sws_DLG_152"),
-                     __LOCALIZE("ReNotes - Ошибка", "sws_DLG_152"),
+                     __LOCALIZE("Failed to import the role file.", "sws_DLG_152"),
+                     __LOCALIZE("ReNotes - Error", "sws_DLG_152"),
                      MB_OK);
         free(fn);
       }
@@ -994,20 +994,20 @@ HMENU NotesWnd::OnContextMenu(int x, int y, bool *wantDefaultItems) {
         if (m_contextMenuActor) {
           if (m_contextMenuActor->HasLinkedActor())
             AddToMenu(hMenu,
-                      __LOCALIZE("Отвязать актёра", "sws_DLG_152"),
+                      __LOCALIZE("Unlink actor", "sws_DLG_152"),
                       UNLINK_ACTOR_MSG,
                       -1,
                       false);
           else
             AddToMenu(hMenu,
-                      __LOCALIZE("Привязать актёра", "sws_DLG_152"),
+                      __LOCALIZE("Link actor", "sws_DLG_152"),
                       LINK_ACTOR_MSG,
                       -1,
                       false);
           AddToMenu(hMenu,
                     m_contextMenuActor->HasLinkedActor()
-                      ? __LOCALIZE("Изменить цвет (актёр)", "sws_DLG_152")
-                      : __LOCALIZE("Изменить цвет", "sws_DLG_152"),
+                      ? __LOCALIZE("Change color (actor)", "sws_DLG_152")
+                      : __LOCALIZE("Change color", "sws_DLG_152"),
                     CHANGE_COLOR_MSG,
                     -1,
                     false);
@@ -1015,29 +1015,29 @@ HMENU NotesWnd::OnContextMenu(int x, int y, bool *wantDefaultItems) {
         }
       }
       AddToMenu(hMenu,
-                __LOCALIZE("Все (+)", "sws_DLG_152"),
+                __LOCALIZE("All (+)", "sws_DLG_152"),
                 ENABLE_ALL_MSG,
                 -1,
                 false);
       AddToMenu(hMenu,
-                __LOCALIZE("Все (-)", "sws_DLG_152"),
+                __LOCALIZE("All (-)", "sws_DLG_152"),
                 DISABLE_ALL_MSG,
                 -1,
                 false);
       AddToMenu(hMenu, SWS_SEPARATOR, 0);
       AddToMenu(hMenu,
-                __LOCALIZE("Импортировать ролёвку", "sws_DLG_152"),
+                __LOCALIZE("Import role file", "sws_DLG_152"),
                 IMPORT_ROLES_MSG,
                 -1,
                 false);
       AddToMenu(hMenu,
-                __LOCALIZE("Экспортировать ролёвку", "sws_DLG_152"),
+                __LOCALIZE("Export role file", "sws_DLG_152"),
                 EXPORT_ROLES_MSG,
                 -1,
                 false);
       AddToMenu(hMenu, SWS_SEPARATOR, 0);
       AddToMenu(hMenu,
-                __LOCALIZE("Скопировать ролёвку в буфер обмена", "sws_DLG_152"),
+                __LOCALIZE("Copy role list to clipboard", "sws_DLG_152"),
                 COPY_ROLE_DISTRIBUTION_MSG,
                 -1,
                 false);
@@ -1048,7 +1048,7 @@ HMENU NotesWnd::OnContextMenu(int x, int y, bool *wantDefaultItems) {
 
   if (g_notesType == SNM_NOTES_RGN_SUB) {
     AddToMenu(hMenu,
-              __LOCALIZE("Отображать цветные регионы", "sws_DLG_152"),
+              __LOCALIZE("Display colored regions", "sws_DLG_152"),
               COLORED_REGIONS_MSG,
               -1,
               false);
@@ -1056,7 +1056,7 @@ HMENU NotesWnd::OnContextMenu(int x, int y, bool *wantDefaultItems) {
       CheckMenuItem(hMenu, COLORED_REGIONS_MSG, MF_BYCOMMAND | MF_CHECKED);
 
     AddToMenu(hMenu,
-              __LOCALIZE("Отображать привязанного актёра в префиксе", "sws_DLG_152"),
+              __LOCALIZE("Display linked actor in prefix", "sws_DLG_152"),
               DISPLAY_ACTOR_PREFIX_MSG,
               -1,
               false);
@@ -1065,7 +1065,7 @@ HMENU NotesWnd::OnContextMenu(int x, int y, bool *wantDefaultItems) {
 
     AddToMenu(hMenu, SWS_SEPARATOR, 0);
     AddToMenu(hMenu,
-              __LOCALIZE("Скопировать маркеры в буфер обмена", "sws_DLG_152"),
+              __LOCALIZE("Copy markers to clipboard", "sws_DLG_152"),
               COPY_MARKERS_MSG,
               -1,
               false);
@@ -1073,7 +1073,7 @@ HMENU NotesWnd::OnContextMenu(int x, int y, bool *wantDefaultItems) {
 
   if (g_notesType == SNM_NOTES_GLOBAL)
     AddToMenu(hMenu,
-              __LOCALIZE("Сохранить глобальные заметки", "sws_DLG_152"),
+              __LOCALIZE("Save global notes", "sws_DLG_152"),
               SAVE_GLOBAL_NOTES_MSG,
               -1,
               false);
@@ -1245,8 +1245,8 @@ void NotesWnd::DrawControls(LICE_IBitmap *_bm, const RECT *_r, int *_tooltipHeig
   SNM_SkinButton(&m_btnLock,
                  it ? &it->toolbar_lock[!g_locked] : NULL,
                  g_locked
-                   ? __LOCALIZE("Разблокировать текст", "sws_DLG_152")
-                   : __LOCALIZE("Заблокировать текст", "sws_DLG_152"));
+                   ? __LOCALIZE("Unlock text", "sws_DLG_152")
+                   : __LOCALIZE("Lock text", "sws_DLG_152"));
   if (SNM_AutoVWndPosition(DT_LEFT, &m_btnLock, NULL, _r, &x0, _r->top, h)) {
     if (SNM_AutoVWndPosition(DT_LEFT, &m_cbType, NULL, _r, &x0, _r->top, h)) {
       if (!g_locked && g_notesType == SNM_NOTES_RGN_SUB
@@ -1258,9 +1258,9 @@ void NotesWnd::DrawControls(LICE_IBitmap *_bm, const RECT *_r, int *_tooltipHeig
       }
 
       if (g_notesType == SNM_NOTES_RGN_SUB) {
-        SNM_SkinToolbarButton(&m_btnImportSub, __LOCALIZE("Добавить субтитры", "sws_DLG_152"));
+        SNM_SkinToolbarButton(&m_btnImportSub, __LOCALIZE("Add subtitles", "sws_DLG_152"));
         if (SNM_AutoVWndPosition(DT_LEFT, &m_btnImportSub, NULL, _r, &x0, _r->top, h)) {
-          SNM_SkinToolbarButton(&m_btnClearSubs, __LOCALIZE("Очистить", "sws_DLG_152"));
+          SNM_SkinToolbarButton(&m_btnClearSubs, __LOCALIZE("Clear", "sws_DLG_152"));
           SNM_AutoVWndPosition(DT_LEFT, &m_btnClearSubs, NULL, _r, &x0, _r->top, h);
         }
       }
@@ -1332,16 +1332,16 @@ bool NotesWnd::GetToolTipString(int _xpos, int _ypos, char *_bufOut, int _bufOut
       case BTNID_LOCK:
         lstrcpyn(_bufOut,
                  g_locked
-                   ? __LOCALIZE("Текст заблокирован", "sws_DLG_152")
-                   : __LOCALIZE("Текст разблокирован", "sws_DLG_152"),
+                   ? __LOCALIZE("Text is locked", "sws_DLG_152")
+                   : __LOCALIZE("Text is unlocked", "sws_DLG_152"),
                  _bufOutSz);
         return true;
       case CMBID_TYPE:
-        lstrcpyn(_bufOut, __LOCALIZE("Режим", "sws_DLG_152"), _bufOutSz);
+        lstrcpyn(_bufOut, __LOCALIZE("Mode", "sws_DLG_152"), _bufOutSz);
         return true;
       case CMBID_REGION:
         lstrcpyn(_bufOut,
-                 __LOCALIZE("Выберите регион для редактирования", "sws_DLG_152"),
+                 __LOCALIZE("Select a region to edit", "sws_DLG_152"),
                  _bufOutSz);
         return true;
     }
@@ -2507,7 +2507,7 @@ bool ImportSubRipFile(const char *_fn) {
 
 void ImportSubTitleFile(COMMAND_T *_ct) {
   if (char *fn = BrowseForFiles(
-    __LOCALIZE("ReNotes - Добавить субтитры", "sws_DLG_152"),
+    __LOCALIZE("ReNotes - Add subtitles", "sws_DLG_152"),
     g_lastImportSubFn,
     NULL,
     false,
@@ -2524,8 +2524,8 @@ void ImportSubTitleFile(COMMAND_T *_ct) {
         w->RefreshActorList();
     } else
       MessageBox(GetMainHwnd(),
-                 __LOCALIZE("Некорректный файл субтитров!", "sws_DLG_152"),
-                 __LOCALIZE("ReNotes - Ошибка", "sws_DLG_152"),
+                 __LOCALIZE("Incorrect subtitle file!", "sws_DLG_152"),
+                 __LOCALIZE("ReNotes - Error", "sws_DLG_152"),
                  MB_OK);
     free(fn);
   }
@@ -2769,8 +2769,8 @@ void WriteGlobalNotesToFile() {
   } else // writing failed
   {
     MessageBox(GetMainHwnd(),
-               __LOCALIZE("Не удалось сохранить глобальные заметки.", "sws_mbox"),
-               __LOCALIZE("ReNotes - Ошибка", "sws_mbox"),
+               __LOCALIZE("Failed to save global notes.", "sws_mbox"),
+               __LOCALIZE("ReNotes - Error", "sws_mbox"),
                MB_OK);
   }
 }
@@ -3125,7 +3125,7 @@ void DisableAllActors(COMMAND_T *) {
 
 void ImportRolesAction(COMMAND_T *) {
   if (char *fn = BrowseForFiles(
-    __LOCALIZE("ReNotes - Импорт ролей", "sws_DLG_152"),
+    __LOCALIZE("ReNotes - Import role file", "sws_DLG_152"),
     g_lastRolesFn,
     NULL,
     false,
@@ -3141,8 +3141,8 @@ void ImportRolesAction(COMMAND_T *) {
       MarkProjectDirty(NULL);
     } else
       MessageBox(GetMainHwnd(),
-                 __LOCALIZE("Не удалось импортировать файл ролей.", "sws_DLG_152"),
-                 __LOCALIZE("ReNotes - Ошибка", "sws_DLG_152"),
+                 __LOCALIZE("Failed to import the role file.", "sws_DLG_152"),
+                 __LOCALIZE("ReNotes - Error", "sws_DLG_152"),
                  MB_OK);
     free(fn);
   }
@@ -3162,14 +3162,14 @@ void ExportRolesAction(COMMAND_T *) {
     hasData = true;
   if (!hasData) {
     MessageBox(GetMainHwnd(),
-               __LOCALIZE("Ничего не найдено для экспорта.", "sws_DLG_152"),
+               __LOCALIZE("Nothing to export.", "sws_DLG_152"),
                __LOCALIZE("ReNotes", "sws_DLG_152"),
                MB_OK);
     return;
   }
   char fn[SNM_MAX_PATH] = "";
   if (BrowseForSaveFile(
-    __LOCALIZE("ReNotes - Экспорт ролей", "sws_DLG_152"),
+    __LOCALIZE("ReNotes - Export role file", "sws_DLG_152"),
     g_lastRolesFn,
     NULL,
     SNM_ROLES_EXT_LIST,
@@ -3178,8 +3178,8 @@ void ExportRolesAction(COMMAND_T *) {
     lstrcpyn(g_lastRolesFn, fn, sizeof(g_lastRolesFn));
     if (!ExportRolesFile(fn))
       MessageBox(GetMainHwnd(),
-                 __LOCALIZE("Не удалось экспортировать роли.", "sws_DLG_152"),
-                 __LOCALIZE("ReNotes - Ошибка", "sws_DLG_152"),
+                 __LOCALIZE("Failed to export role file.", "sws_DLG_152"),
+                 __LOCALIZE("ReNotes - Error", "sws_DLG_152"),
                  MB_OK);
   }
 }

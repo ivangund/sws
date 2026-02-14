@@ -954,65 +954,65 @@ static COMMAND_T s_cmdTable[] =
 
   // ReNotes ----------------------------------------------------------------
   {
-    {DEFACCEL, "SWS/S&M: ReNotes - Открыть/закрыть"}, "S&M_SHOW_NOTES_VIEW", OpenNotes, NULL, -1,
+    {DEFACCEL, "SWS/S&M: ReNotes - Open/close"}, "S&M_SHOW_NOTES_VIEW", OpenNotes, NULL, -1,
     IsNotesDisplayed
   },
   {
-    {DEFACCEL, "SWS/S&M: ReNotes - Открыть/закрыть (заметки проекта)"}, "S&M_SHOWNOTESHELP",
+    {DEFACCEL, "SWS/S&M: ReNotes - Open/close (project notes)"}, "S&M_SHOWNOTESHELP",
     OpenNotes, NULL, SNM_NOTES_PROJECT, IsNotesDisplayed
   },
   {
-    {DEFACCEL, "SWS/S&M: ReNotes - Открыть/закрыть (доп. заметки проекта)"},
+    {DEFACCEL, "SWS/S&M: ReNotes - Open/close (extra project notes)"},
     "S&M_EXTRAPROJECTNOTES", OpenNotes, NULL, SNM_NOTES_PROJECT_EXTRA, IsNotesDisplayed
   },
   // #647
   {
-    {DEFACCEL, "SWS/S&M: ReNotes - Открыть/закрыть (глобальные заметки)"}, "S&M_GLOBALNOTES",
+    {DEFACCEL, "SWS/S&M: ReNotes - Open/close (global notes)"}, "S&M_GLOBALNOTES",
     OpenNotes, NULL, SNM_NOTES_GLOBAL, IsNotesDisplayed
   },
   {
-    {DEFACCEL, "SWS/S&M: ReNotes - Открыть/закрыть (заметки айтема)"}, "S&M_ITEMNOTES", OpenNotes,
+    {DEFACCEL, "SWS/S&M: ReNotes - Open/close (item notes)"}, "S&M_ITEMNOTES", OpenNotes,
     NULL, SNM_NOTES_ITEM, IsNotesDisplayed
   },
   {
-    {DEFACCEL, "SWS/S&M: ReNotes - Открыть/закрыть (заметки дорожки)"}, "S&M_TRACKNOTES", OpenNotes,
+    {DEFACCEL, "SWS/S&M: ReNotes - Open/close (track notes)"}, "S&M_TRACKNOTES", OpenNotes,
     NULL, SNM_NOTES_TRACK, IsNotesDisplayed
   },
   {
-    {DEFACCEL, "SWS/S&M: ReNotes - Открыть/закрыть (субтитры)"}, "S&M_RGN_SUBTITLES", OpenNotes,
+    {DEFACCEL, "SWS/S&M: ReNotes - Open/close (subtitles)"}, "S&M_RGN_SUBTITLES", OpenNotes,
     NULL, SNM_NOTES_RGN_SUB, IsNotesDisplayed
   },
   {
-    {DEFACCEL, "SWS/S&M: ReNotes - Переключить блокировку текста"}, "S&M_ACTIONHELPTGLOCK",
+    {DEFACCEL, "SWS/S&M: ReNotes - Switch text block"}, "S&M_ACTIONHELPTGLOCK",
     ToggleNotesLock, NULL, 0, IsNotesLocked
   },
   {
-    {DEFACCEL, "SWS/S&M: ReNotes - Добавить субтитры"}, "S&M_IMPORT_SUBTITLE", ImportSubTitleFile,
+    {DEFACCEL, "SWS/S&M: ReNotes - Add subtitles"}, "S&M_IMPORT_SUBTITLE", ImportSubTitleFile,
     NULL,
   },
   {
-    {DEFACCEL, "SWS/S&M: ReNotes - Отображать цветные регионы"}, "S&M_COLORED_REGIONS",
+    {DEFACCEL, "SWS/S&M: ReNotes - Display colored regions"}, "S&M_COLORED_REGIONS",
     ToggleColoredRegions,
     NULL, 0, IsColoredRegions
   },
   {
-    {DEFACCEL, "SWS/S&M: ReNotes - Очистить субтитры"}, "S&M_CLEAR_SUBTITLES",
+    {DEFACCEL, "SWS/S&M: ReNotes - Clear subtitles"}, "S&M_CLEAR_SUBTITLES",
     ClearAllSubtitlesAction, NULL,
   },
   {
-    {DEFACCEL, "SWS/S&M: ReNotes - Все персонажи (актёры) активны"}, "S&M_ENABLE_ALL_ACTORS",
+    {DEFACCEL, "SWS/S&M: ReNotes - All characters (actors) +"}, "S&M_ENABLE_ALL_ACTORS",
     EnableAllActors, NULL,
   },
   {
-    {DEFACCEL, "SWS/S&M: ReNotes - Все персонажи (актёры) неактивны"}, "S&M_DISABLE_ALL_ACTORS",
+    {DEFACCEL, "SWS/S&M: ReNotes - All characters (actors) -"}, "S&M_DISABLE_ALL_ACTORS",
     DisableAllActors, NULL,
   },
   {
-    {DEFACCEL, "SWS/S&M: ReNotes - Импортировать ролёвку"}, "S&M_IMPORT_ROLES",
+    {DEFACCEL, "SWS/S&M: ReNotes - Import role file"}, "S&M_IMPORT_ROLES",
     ImportRolesAction, NULL,
   },
   {
-    {DEFACCEL, "SWS/S&M: ReNotes - Экспортировать ролёвку"}, "S&M_EXPORT_ROLES",
+    {DEFACCEL, "SWS/S&M: ReNotes - Export role file"}, "S&M_EXPORT_ROLES",
     ExportRolesAction, NULL,
   },
 
