@@ -69,6 +69,8 @@ enum {
   UNLINK_ACTOR_MSG,
   CHANGE_COLOR_MSG,
   COLORED_REGIONS_MSG,
+  HIDE_REGIONS_MSG,
+  HIDE_ACTOR_LIST_MSG,
   DISPLAY_ACTOR_PREFIX_MSG,
   IMPORT_ROLES_MSG,
   EXPORT_ROLES_MSG,
@@ -76,6 +78,7 @@ enum {
   DISABLE_ALL_MSG,
   COPY_MARKERS_MSG,
   COPY_ROLE_DISTRIBUTION_MSG,
+  COPY_CURRENT_PHRASE_MSG,
   LAST_MSG
 };
 
@@ -95,6 +98,8 @@ enum {
 };
 
 int GenerateActorColor(const char *actorName);
+bool ImportAssFile(const char *_fn);
+bool ImportSubRipFile(const char *_fn);
 
 SNM_WindowManager<NotesWnd> g_notesWndMgr(NOTES_WND_ID);
 
@@ -108,11 +113,18 @@ WDL_FastString g_globalNotes;
 bool g_globalNotesDirty = false;
 bool g_coloredRegions = true;
 bool g_displayActorInPrefix = true;
+bool g_hideRegions = false;
+bool g_hideActorList = false;
+static bool g_pendingRegionRecreation = false;
 SWSProjConfig<WDL_PtrList_DOD<SNM_Actor> > g_importedRoleActors;
 
 void CleanupStaleActors();
 void ClearAllSubtitles();
 void UpdateRegionColors();
+void HideAllRegions();
+void ShowAllRegions();
+void ToggleHideRegions(COMMAND_T *);
+void ToggleHideActorList(COMMAND_T *);
 bool ExportRolesFile(const char *fn);
 bool ImportRolesFile(const char *fn);
 
@@ -187,6 +199,8 @@ void NotesWnd::OnInitDlg() {
 
   m_resize.init_item(IDC_EDIT1, 0.0, 0.0, 1.0, 1.0);
   m_resize.init_item(IDC_EDIT2, 0.0, 0.0, 1.0, 1.0);
+
+  DragAcceptFiles(m_hwnd, TRUE);
 
   SetWrapText(g_wrapText);
 
@@ -329,7 +343,7 @@ void NotesWnd::RefreshGUI() {
         bHide = false;
       break;
     case SNM_NOTES_RGN_SUB:
-      if (g_lastMarkerRegionId > 0)
+      if (g_hideRegions ? g_lastMarkerRegionId >= 0 : g_lastMarkerRegionId > 0)
         bHide = false;
       break;
   }
@@ -434,6 +448,7 @@ void DeleteActorRegions(const char *actorName) {
 }
 
 void RecreateActorRegions(const char *actorName) {
+  if (g_hideRegions) return;
   SNM_Actor *actor = NULL;
   WDL_PtrList_DOD<SNM_Actor> *actors = g_actors.Get();
   for (int i = 0; i < actors->GetSize(); i++)
@@ -467,6 +482,7 @@ void RecreateActorRegions(const char *actorName) {
 }
 
 void UpdateRegionColors() {
+  if (g_hideRegions) return;
   WDL_PtrList_DOD<SNM_RegionSubtitle> *subs = g_pRegionSubs.Get();
   WDL_PtrList_DOD<SNM_Actor> *actors = g_actors.Get();
 
@@ -650,7 +666,7 @@ static void CopyMarkersToClipboard(HWND hwnd) {
         }
       }
 
-      output.AppendFormatted(512, "%s - %s %s\n", startBuf, endBuf, text.Get());
+      output.AppendFormatted(512, "%s-%s %s\n", startBuf, endBuf, text.Get());
     }
   };
 
@@ -763,6 +779,12 @@ void NotesWnd::OnCommand(WPARAM wParam, LPARAM lParam) {
     case COLORED_REGIONS_MSG:
       ToggleColoredRegions(NULL);
       break;
+    case HIDE_REGIONS_MSG:
+      ToggleHideRegions(NULL);
+      break;
+    case HIDE_ACTOR_LIST_MSG:
+      ToggleHideActorList(NULL);
+      break;
     case DISPLAY_ACTOR_PREFIX_MSG:
       g_displayActorInPrefix = !g_displayActorInPrefix;
       UpdateRegionColors();
@@ -778,6 +800,72 @@ void NotesWnd::OnCommand(WPARAM wParam, LPARAM lParam) {
     case COPY_MARKERS_MSG:
       CopyMarkersToClipboard(GetHWND());
       break;
+    case COPY_CURRENT_PHRASE_MSG: {
+      if (m_overlappingRegionIds.GetSize() <= 0) break;
+      WDL_FastString output;
+      for (int i = 0; i < m_overlappingRegionIds.GetSize(); i++) {
+        SNM_RegionSubtitle *sub = NULL;
+        double pos, endPos;
+        if (g_hideRegions) {
+          int subIdx = m_overlappingRegionIds.Get()[i];
+          sub = g_pRegionSubs.Get()->Get(subIdx);
+          if (!sub) continue;
+          pos = sub->GetStartTime();
+          endPos = sub->GetEndTime();
+        } else {
+          int regId = m_overlappingRegionIds.Get()[i];
+          for (int j = 0; j < g_pRegionSubs.Get()->GetSize(); j++) {
+            if (g_pRegionSubs.Get()->Get(j)->GetId() == regId) {
+              sub = g_pRegionSubs.Get()->Get(j);
+              break;
+            }
+          }
+          if (!sub) continue;
+          if (EnumMarkerRegionById(NULL, regId, NULL, &pos, &endPos, NULL, NULL, NULL) < 0)
+            continue;
+        }
+        {
+            char startBuf[32], endBuf[32];
+            FormatSubTime(pos, startBuf, sizeof(startBuf));
+            FormatSubTime(endPos, endBuf, sizeof(endBuf));
+
+            WDL_FastString text(sub->GetNotes());
+            for (int p = 0; p < text.GetLength();) {
+              char c = text.Get()[p];
+              bool isBreak = false;
+              int breakLen = 0;
+              if (c == '\\' && p + 1 < text.GetLength() && (text.Get()[p + 1] == 'N' || text.Get()[p + 1] == 'n')) {
+                isBreak = true;
+                breakLen = 2;
+              } else if (c == '\r' && p + 1 < text.GetLength() && text.Get()[p + 1] == '\n') {
+                isBreak = true;
+                breakLen = 2;
+              } else if (c == '\n' || c == '\r') {
+                isBreak = true;
+                breakLen = 1;
+              }
+              if (isBreak) {
+                int start = p;
+                while (start > 0 && text.Get()[start - 1] == ' ') start--;
+                int end = p + breakLen;
+                while (end < text.GetLength() && text.Get()[end] == ' ') end++;
+                text.DeleteSub(start, end - start);
+                text.Insert(" ", start);
+                p = start + 1;
+              } else {
+                p++;
+              }
+            }
+
+            if (output.GetLength() > 0)
+              output.Append("\n");
+            output.AppendFormatted(512, "%s-%s %s", startBuf, endBuf, text.Get());
+        }
+      }
+      if (output.GetLength() > 0)
+        CF_SetClipboard(output.Get());
+    }
+    break;
     case COPY_ROLE_DISTRIBUTION_MSG: {
       WDL_PtrList_DOD<SNM_Actor> *actors = g_actors.Get();
 
@@ -837,11 +925,17 @@ void NotesWnd::OnCommand(WPARAM wParam, LPARAM lParam) {
         int selIdx = m_cbRegion.GetCurSel2();
         if (selIdx >= 0 && selIdx < m_overlappingRegionIds.GetSize()) {
           g_lastMarkerRegionId = m_overlappingRegionIds.Get()[selIdx];
-          for (int i = 0; i < g_pRegionSubs.Get()->GetSize(); i++) {
-            SNM_RegionSubtitle *sub = g_pRegionSubs.Get()->Get(i);
-            if (sub->GetId() == g_lastMarkerRegionId) {
+          if (g_hideRegions) {
+            SNM_RegionSubtitle *sub = g_pRegionSubs.Get()->Get(g_lastMarkerRegionId);
+            if (sub)
               SetText(sub->GetNotes());
-              break;
+          } else {
+            for (int i = 0; i < g_pRegionSubs.Get()->GetSize(); i++) {
+              SNM_RegionSubtitle *sub = g_pRegionSubs.Get()->Get(i);
+              if (sub->GetId() == g_lastMarkerRegionId) {
+                SetText(sub->GetNotes());
+                break;
+              }
             }
           }
           RefreshGUI();
@@ -960,7 +1054,7 @@ void NotesWnd::OnCommand(WPARAM wParam, LPARAM lParam) {
           MarkProjectDirty(NULL);
         } else
           MessageBox(m_hwnd,
-                     __LOCALIZE("Не удалось импортировать ролёвку.", "sws_DLG_152"),
+                     __LOCALIZE("Некорректный файл ролёвки!", "sws_DLG_152"),
                      __LOCALIZE("ReNotes - Ошибка", "sws_DLG_152"),
                      MB_OK);
         free(fn);
@@ -1015,29 +1109,29 @@ HMENU NotesWnd::OnContextMenu(int x, int y, bool *wantDefaultItems) {
         }
       }
       AddToMenu(hMenu,
-                __LOCALIZE("Все (+)", "sws_DLG_152"),
+                __LOCALIZE("Все ✓\tCtrl+Shift+A", "sws_DLG_152"),
                 ENABLE_ALL_MSG,
                 -1,
                 false);
       AddToMenu(hMenu,
-                __LOCALIZE("Все (-)", "sws_DLG_152"),
+                __LOCALIZE("Все 🗙\tCtrl+Shift+D", "sws_DLG_152"),
                 DISABLE_ALL_MSG,
                 -1,
                 false);
       AddToMenu(hMenu, SWS_SEPARATOR, 0);
       AddToMenu(hMenu,
-                __LOCALIZE("Импортировать ролёвку", "sws_DLG_152"),
+                __LOCALIZE("Импортировать ролёвку\tCtrl+Shift+I", "sws_DLG_152"),
                 IMPORT_ROLES_MSG,
                 -1,
                 false);
       AddToMenu(hMenu,
-                __LOCALIZE("Экспортировать ролёвку", "sws_DLG_152"),
+                __LOCALIZE("Экспортировать ролёвку\tCtrl+Shift+E", "sws_DLG_152"),
                 EXPORT_ROLES_MSG,
                 -1,
                 false);
       AddToMenu(hMenu, SWS_SEPARATOR, 0);
       AddToMenu(hMenu,
-                __LOCALIZE("Скопировать ролёвку в буфер обмена", "sws_DLG_152"),
+                __LOCALIZE("Скопировать ролёвку в буфер обмена\tCtrl+Shift+R", "sws_DLG_152"),
                 COPY_ROLE_DISTRIBUTION_MSG,
                 -1,
                 false);
@@ -1048,15 +1142,27 @@ HMENU NotesWnd::OnContextMenu(int x, int y, bool *wantDefaultItems) {
 
   if (g_notesType == SNM_NOTES_RGN_SUB) {
     AddToMenu(hMenu,
-              __LOCALIZE("Отображать цветные регионы", "sws_DLG_152"),
+              __LOCALIZE("Скопировать текущую фразу в буфер обмена\tCtrl+C", "sws_DLG_152"),
+              COPY_CURRENT_PHRASE_MSG,
+              -1,
+              false,
+              m_overlappingRegionIds.GetSize() > 0 ? MF_ENABLED : MF_GRAYED);
+    AddToMenu(hMenu,
+              __LOCALIZE("Скопировать маркеры в буфер обмена\tCtrl+M", "sws_DLG_152"),
+              COPY_MARKERS_MSG,
+              -1,
+              false);
+
+    AddToMenu(hMenu, SWS_SEPARATOR, 0);
+    AddToMenu(hMenu,
+              __LOCALIZE("Отображать цветные регионы\tC", "sws_DLG_152"),
               COLORED_REGIONS_MSG,
               -1,
               false);
     if (g_coloredRegions)
       CheckMenuItem(hMenu, COLORED_REGIONS_MSG, MF_BYCOMMAND | MF_CHECKED);
-
     AddToMenu(hMenu,
-              __LOCALIZE("Отображать привязанного актёра в префиксе", "sws_DLG_152"),
+              __LOCALIZE("Отображать привязанного актёра в префиксе\tP", "sws_DLG_152"),
               DISPLAY_ACTOR_PREFIX_MSG,
               -1,
               false);
@@ -1065,10 +1171,19 @@ HMENU NotesWnd::OnContextMenu(int x, int y, bool *wantDefaultItems) {
 
     AddToMenu(hMenu, SWS_SEPARATOR, 0);
     AddToMenu(hMenu,
-              __LOCALIZE("Скопировать маркеры в буфер обмена", "sws_DLG_152"),
-              COPY_MARKERS_MSG,
+              __LOCALIZE("Скрыть ролёвку\tA", "sws_DLG_152"),
+              HIDE_ACTOR_LIST_MSG,
               -1,
               false);
+    if (g_hideActorList)
+      CheckMenuItem(hMenu, HIDE_ACTOR_LIST_MSG, MF_BYCOMMAND | MF_CHECKED);
+    AddToMenu(hMenu,
+              __LOCALIZE("Скрыть регионы\tR", "sws_DLG_152"),
+              HIDE_REGIONS_MSG,
+              -1,
+              false);
+    if (g_hideRegions)
+      CheckMenuItem(hMenu, HIDE_REGIONS_MSG, MF_BYCOMMAND | MF_CHECKED);
   }
 
   if (g_notesType == SNM_NOTES_GLOBAL)
@@ -1094,17 +1209,110 @@ void OSXForceTxtChangeJob::Perform() {
 //  0 = pass-thru to main window (then -666 in SWS_DockWnd::keyHandler())
 //  1 = eat
 int NotesWnd::OnKey(MSG *_msg, int _iKeyState) {
+  if (_msg->message == WM_KEYDOWN) {
+    bool editFocused = (_msg->hwnd == m_edit) && !g_locked;
+    bool isRgnSub    = (g_notesType == SNM_NOTES_RGN_SUB);
+
+    if (!editFocused && !_iKeyState && _msg->wParam == 'L') {
+      OnCommand(BTNID_LOCK, 0);
+      return 1;
+    }
+
+    if (isRgnSub) {
+      if (_iKeyState == (LVKF_CONTROL | LVKF_SHIFT)) {
+        switch (_msg->wParam) {
+          case VK_DELETE: OnCommand(BTNID_CLEAR_SUBS, 0);           return 1;
+          case 'I':       OnCommand(IMPORT_ROLES_MSG, 0);           return 1;
+          case 'E':       OnCommand(EXPORT_ROLES_MSG, 0);           return 1;
+          case 'R':       OnCommand(COPY_ROLE_DISTRIBUTION_MSG, 0); return 1;
+          case 'A':       OnCommand(ENABLE_ALL_MSG, 0);             return 1;
+          case 'D':       OnCommand(DISABLE_ALL_MSG, 0);            return 1;
+        }
+      }
+      if (_iKeyState == LVKF_CONTROL) {
+        switch (_msg->wParam) {
+          case 'I': OnCommand(BTNID_IMPORT_SUB, 0);  return 1;
+          case 'M': OnCommand(COPY_MARKERS_MSG, 0);  return 1;
+          case 'C':
+            if (!editFocused) { OnCommand(COPY_CURRENT_PHRASE_MSG, 0); return 1; }
+            break;
+          case 'V':
+            if (IsClipboardFormatAvailable(CF_HDROP)) {
+              if (OpenClipboard(m_hwnd)) {
+                HANDLE hDrop = GetClipboardData(CF_HDROP);
+                if (hDrop) {
+                  HDROP hdrop = (HDROP)GlobalLock(hDrop);
+                  if (hdrop) {
+                    int iFiles = DragQueryFile(hdrop, 0xFFFFFFFF, NULL, 0);
+                    bool imported = false;
+                    bool rolesImported = false;
+                    for (int i = 0; i < iFiles; i++) {
+                      char fn[SNM_MAX_PATH] = "";
+                      DragQueryFile(hdrop, i, fn, sizeof(fn));
+                      if (HasFileExtension(fn, "ASS")) {
+                        if (ImportAssFile(fn)) imported = true;
+                        lstrcpyn(g_lastImportSubFn, fn, sizeof(g_lastImportSubFn));
+                      } else if (HasFileExtension(fn, "SRT")) {
+                        if (ImportSubRipFile(fn)) imported = true;
+                        lstrcpyn(g_lastImportSubFn, fn, sizeof(g_lastImportSubFn));
+                      } else if (HasFileExtension(fn, "ROLES")) {
+                        if (ImportRolesFile(fn)) {
+                          lstrcpyn(g_lastRolesFn, fn, sizeof(g_lastRolesFn));
+                          rolesImported = true;
+                        } else {
+                          MessageBox(GetMainHwnd(),
+                                     __LOCALIZE("Некорректный файл ролёвки!", "sws_DLG_152"),
+                                     __LOCALIZE("ReNotes - Ошибка", "sws_DLG_152"),
+                                     MB_OK);
+                        }
+                      } else {
+                        MessageBox(GetMainHwnd(),
+                                   __LOCALIZE("Некорректный файл субтитров!", "sws_DLG_152"),
+                                   __LOCALIZE("ReNotes - Ошибка", "sws_DLG_152"),
+                                   MB_OK);
+                      }
+                    }
+                    GlobalUnlock(hDrop);
+                    if (imported) {
+                      MarkProjectDirty(NULL);
+                      RefreshActorList();
+                    }
+                    if (rolesImported) {
+                      UpdateRegionColors();
+                      RefreshActorList();
+                      ForceUpdateRgnSub();
+                      RefreshGUI();
+                      MarkProjectDirty(NULL);
+                    }
+                  }
+                }
+                CloseClipboard();
+              }
+              return 1;
+            }
+            break;
+        }
+      }
+      if (!editFocused && !_iKeyState) {
+        switch (_msg->wParam) {
+          case 'C': OnCommand(COLORED_REGIONS_MSG,      0); return 1;
+          case 'P': OnCommand(DISPLAY_ACTOR_PREFIX_MSG, 0); return 1;
+          case 'R': OnCommand(HIDE_REGIONS_MSG,         0); return 1;
+          case 'A': OnCommand(HIDE_ACTOR_LIST_MSG,      0); return 1;
+        }
+      }
+    }
+  }
+
   if (g_locked) {
-    _msg->hwnd = m_hwnd; // redirect to main window
+    _msg->hwnd = m_hwnd;
     return 0;
   } else if (_msg->hwnd == m_edit) {
 #ifdef _SNM_SWELL_ISSUES
-    // fix/workaround (SWELL bug?): EN_CHANGE is not always sent...
     ScheduledJob::Schedule(new OSXForceTxtChangeJob());
 #endif
     return -1;
   } else if (_msg->message == WM_KEYDOWN || _msg->message == WM_CHAR) {
-    // ctrl+A => select all
     if (_msg->wParam == 'A' && _iKeyState == LVKF_CONTROL) {
       SetFocus(m_edit);
       SendMessage(m_edit, EM_SETSEL, 0, -1);
@@ -1152,28 +1360,35 @@ void NotesWnd::OnResize() {
   if (g_notesType == SNM_NOTES_RGN_SUB) {
     RECT r;
     GetClientRect(m_hwnd, &r);
-    int panelWidth = max(150, (int) r.right / 6);
-    m_resize.get_item(IDC_EDIT1)->orig.right = m_resize.get_item(IDC_EDIT1)->real_orig.right -
-        panelWidth;
-    m_resize.get_item(IDC_EDIT1)->orig.bottom = m_resize.get_item(IDC_EDIT1)->real_orig.bottom - 41;
-    m_resize.get_item(IDC_EDIT2)->orig.right = m_resize.get_item(IDC_EDIT2)->real_orig.right -
-        panelWidth;
-    m_resize.get_item(IDC_EDIT2)->orig.bottom = m_resize.get_item(IDC_EDIT2)->real_orig.bottom - 41;
     HWND listHwnd = m_actorListView->GetHWND();
-    int listBottom = r.bottom - 16;
-    int rightMargin = SNM_GUI_X_MARGIN;
-    ShowWindow(listHwnd, SW_SHOWNA);
-    SetWindowPos(listHwnd,
-                 NULL,
-                 r.right - panelWidth - rightMargin,
-                 SNM_GUI_TOP_H,
-                 panelWidth,
-                 listBottom - SNM_GUI_TOP_H,
-                 SWP_NOZORDER);
-    int vscrollWidth = GetSystemMetrics(SM_CXVSCROLL);
-    ListView_SetColumnWidth(listHwnd, 0, 26);
-    ListView_SetColumnWidth(listHwnd, 1, panelWidth - 26 - vscrollWidth);
-
+    if (!g_hideActorList) {
+      int panelWidth = max(150, (int) r.right / 6);
+      m_resize.get_item(IDC_EDIT1)->orig.right = m_resize.get_item(IDC_EDIT1)->real_orig.right -
+          panelWidth;
+      m_resize.get_item(IDC_EDIT1)->orig.bottom = m_resize.get_item(IDC_EDIT1)->real_orig.bottom - 41;
+      m_resize.get_item(IDC_EDIT2)->orig.right = m_resize.get_item(IDC_EDIT2)->real_orig.right -
+          panelWidth;
+      m_resize.get_item(IDC_EDIT2)->orig.bottom = m_resize.get_item(IDC_EDIT2)->real_orig.bottom - 41;
+      int listBottom = r.bottom - 16;
+      int rightMargin = SNM_GUI_X_MARGIN;
+      ShowWindow(listHwnd, SW_SHOWNA);
+      SetWindowPos(listHwnd,
+                   NULL,
+                   r.right - panelWidth - rightMargin,
+                   SNM_GUI_TOP_H,
+                   panelWidth,
+                   listBottom - SNM_GUI_TOP_H,
+                   SWP_NOZORDER);
+      int vscrollWidth = GetSystemMetrics(SM_CXVSCROLL);
+      ListView_SetColumnWidth(listHwnd, 0, 26);
+      ListView_SetColumnWidth(listHwnd, 1, panelWidth - 26 - vscrollWidth);
+    } else {
+      ShowWindow(listHwnd, SW_HIDE);
+      m_resize.get_item(IDC_EDIT1)->orig.right = m_resize.get_item(IDC_EDIT1)->real_orig.right;
+      m_resize.get_item(IDC_EDIT1)->orig.bottom = m_resize.get_item(IDC_EDIT1)->real_orig.bottom - 41;
+      m_resize.get_item(IDC_EDIT2)->orig.right = m_resize.get_item(IDC_EDIT2)->real_orig.right;
+      m_resize.get_item(IDC_EDIT2)->orig.bottom = m_resize.get_item(IDC_EDIT2)->real_orig.bottom - 41;
+    }
     m_actorListView->Update();
   } else {
     ShowWindow(m_actorListView->GetHWND(), SW_HIDE);
@@ -1192,11 +1407,11 @@ void NotesWnd::DrawControls(LICE_IBitmap *_bm, const RECT *_r, int *_tooltipHeig
   if (g_locked) {
     // work on a copy rather than g_lastText (will get modified)
     char buf[sizeof(g_lastText)]{};
-    GetWindowText(m_edit, buf, sizeof(buf));
+    lstrcpyn(buf, g_lastText, sizeof(buf));
     if (*buf) {
       RECT r = *_r;
       r.top += h;
-      if (g_notesType == SNM_NOTES_RGN_SUB)
+      if (g_notesType == SNM_NOTES_RGN_SUB && !g_hideActorList)
         r.right -= max(150, (int) (_r->right - _r->left) / 6);
       m_bigNotes.SetPosition(&r);
 
@@ -1276,7 +1491,7 @@ void NotesWnd::DrawControls(LICE_IBitmap *_bm, const RECT *_r, int *_tooltipHeig
   h = SNM_GUI_BOT_H;
   int y0 = _r->bottom - h;
 
-  if (g_notesType == SNM_NOTES_RGN_SUB) {
+  if (g_notesType == SNM_NOTES_RGN_SUB && !g_hideActorList) {
     int panelWidth = max(150, (int) (_r->right - _r->left) / 6);
     int tableLeft = _r->right - panelWidth - SNM_GUI_X_MARGIN;
 
@@ -1330,11 +1545,18 @@ bool NotesWnd::GetToolTipString(int _xpos, int _ypos, char *_bufOut, int _bufOut
   if (WDL_VWnd *v = m_parentVwnd.VirtWndFromPoint(_xpos, _ypos, 1)) {
     switch (v->GetID()) {
       case BTNID_LOCK:
-        lstrcpyn(_bufOut,
-                 g_locked
-                   ? __LOCALIZE("Текст заблокирован", "sws_DLG_152")
-                   : __LOCALIZE("Текст разблокирован", "sws_DLG_152"),
-                 _bufOutSz);
+        snprintf(_bufOut, _bufOutSz, "%s  (L)",
+          g_locked
+            ? __LOCALIZE("Текст заблокирован",  "sws_DLG_152")
+            : __LOCALIZE("Текст разблокирован", "sws_DLG_152"));
+        return true;
+      case BTNID_IMPORT_SUB:
+        snprintf(_bufOut, _bufOutSz, "%s  (Ctrl+I)",
+          __LOCALIZE("Добавить субтитры", "sws_DLG_152"));
+        return true;
+      case BTNID_CLEAR_SUBS:
+        snprintf(_bufOut, _bufOutSz, "%s  (Ctrl+Shift+Del)",
+          __LOCALIZE("Очистить", "sws_DLG_152"));
         return true;
       case CMBID_TYPE:
         lstrcpyn(_bufOut, __LOCALIZE("Режим", "sws_DLG_152"), _bufOutSz);
@@ -1449,6 +1671,17 @@ void NotesWnd::SaveCurrentGlobalNotes(bool _wantUndo) {
 }
 
 void NotesWnd::SaveCurrentRgnSub(bool _wantUndo) {
+  if (g_hideRegions) {
+    if (g_lastMarkerRegionId >= 0) {
+      GetWindowText(m_edit, g_lastText, sizeof(g_lastText));
+      SNM_RegionSubtitle *sub = g_pRegionSubs.Get()->Get(g_lastMarkerRegionId);
+      if (sub)
+        sub->SetNotes(g_lastText);
+      MarkProjectDirty(NULL);
+    }
+    return;
+  }
+
   if (g_lastMarkerRegionId > 0) {
     GetWindowText(m_edit, g_lastText, sizeof(g_lastText));
 
@@ -1606,158 +1839,275 @@ int NotesWnd::UpdateRgnSub() {
   if (fabs(g_lastMarkerPos - dPos) > accuracy) {
     g_lastMarkerPos = dPos;
 
-    int id, idx = FindMarkerRegion(NULL, dPos, SNM_REGION_MASK, &id);
-    if (id > 0) {
-      WDL_TypedBuf<int> newOverlappingIds;
-      int enumIdx = 0;
-      bool isRgn;
-      double p1, p2;
-      int num;
-      while ((enumIdx = EnumProjectMarkers2(NULL, enumIdx, &isRgn, &p1, &p2, NULL, &num))) {
-        if (isRgn && dPos >= p1 && dPos <= p2) {
-          int regionId = MakeMarkerRegionId(num, true);
-          for (int i = 0; i < g_pRegionSubs.Get()->GetSize(); i++) {
-            if (g_pRegionSubs.Get()->Get(i)->GetId() == regionId) {
-              newOverlappingIds.Add(regionId);
-              break;
-            }
-          }
-        }
-      }
+    if (g_hideRegions) {
+      WDL_PtrList_DOD<SNM_RegionSubtitle> *subs = g_pRegionSubs.Get();
+      WDL_PtrList_DOD<SNM_Actor> *actors = g_actors.Get();
 
-      bool regionsChanged = false;
-      if (newOverlappingIds.GetSize() != m_overlappingRegionIds.GetSize())
-        regionsChanged = true;
-      else {
-        for (int i = 0; i < newOverlappingIds.GetSize(); i++) {
-          if (newOverlappingIds.Get()[i] != m_overlappingRegionIds.Get()[i]) {
-            regionsChanged = true;
+      WDL_TypedBuf<int> newOverlapping;
+      for (int i = 0; i < subs->GetSize(); i++) {
+        SNM_RegionSubtitle *sub = subs->Get(i);
+        if (dPos < sub->GetStartTime() || dPos > sub->GetEndTime())
+          continue;
+        bool enabled = false;
+        for (int j = 0; j < actors->GetSize(); j++) {
+          if (!strcmp(actors->Get(j)->GetName(), sub->GetActor())) {
+            enabled = actors->Get(j)->IsEnabled();
             break;
           }
         }
+        if (enabled)
+          newOverlapping.Add(i);
       }
 
-      if (regionsChanged) {
-        m_overlappingRegionIds.Resize(newOverlappingIds.GetSize());
-        memcpy(m_overlappingRegionIds.Get(),
-               newOverlappingIds.Get(),
-               newOverlappingIds.GetSize() * sizeof(int));
-
-        m_cbRegion.Empty();
-        for (int i = 0; i < m_overlappingRegionIds.GetSize(); i++) {
-          int regId = m_overlappingRegionIds.Get()[i];
-          for (int j = 0; j < g_pRegionSubs.Get()->GetSize(); j++) {
-            SNM_RegionSubtitle *sub = g_pRegionSubs.Get()->Get(j);
-            if (sub->GetId() == regId) {
-              char itemText[256];
-              const char *actor = sub->GetActor();
-              if (actor && *actor)
-                snprintf(itemText, sizeof(itemText), "%s", actor);
-              else {
-                double pos, end;
-                int num;
-                if (EnumMarkerRegionById(NULL, regId, NULL, &pos, &end, NULL, &num, NULL) >= 0)
-                  snprintf(itemText, sizeof(itemText), "R%d", num);
-                else
-                  snprintf(itemText, sizeof(itemText), "Region %d", i + 1);
-              }
-              m_cbRegion.AddItem(itemText);
+      if (newOverlapping.GetSize() > 0) {
+        bool regionsChanged = false;
+        if (newOverlapping.GetSize() != m_overlappingRegionIds.GetSize())
+          regionsChanged = true;
+        else {
+          for (int i = 0; i < newOverlapping.GetSize(); i++) {
+            if (newOverlapping.Get()[i] != m_overlappingRegionIds.Get()[i]) {
+              regionsChanged = true;
               break;
             }
           }
         }
 
-        int selIdx = 0;
-        for (int i = 0; i < m_overlappingRegionIds.GetSize(); i++) {
-          if (m_overlappingRegionIds.Get()[i] == g_lastMarkerRegionId) {
-            selIdx = i;
-            break;
-          }
-        }
-        m_cbRegion.SetCurSel2(selIdx);
+        if (regionsChanged) {
+          m_overlappingRegionIds.Resize(newOverlapping.GetSize());
+          memcpy(m_overlappingRegionIds.Get(),
+                 newOverlapping.Get(),
+                 newOverlapping.GetSize() * sizeof(int));
 
-        if (m_overlappingRegionIds.GetSize() > 0)
+          m_cbRegion.Empty();
+          for (int i = 0; i < m_overlappingRegionIds.GetSize(); i++) {
+            int subIdx = m_overlappingRegionIds.Get()[i];
+            SNM_RegionSubtitle *sub = subs->Get(subIdx);
+            char itemText[256];
+            const char *actor = sub->GetActor();
+            if (actor && *actor)
+              snprintf(itemText, sizeof(itemText), "%s", actor);
+            else
+              snprintf(itemText, sizeof(itemText), "Sub %d", i + 1);
+            m_cbRegion.AddItem(itemText);
+          }
+
+          int selIdx = 0;
+          for (int i = 0; i < m_overlappingRegionIds.GetSize(); i++) {
+            if (m_overlappingRegionIds.Get()[i] == g_lastMarkerRegionId) {
+              selIdx = i;
+              break;
+            }
+          }
+          m_cbRegion.SetCurSel2(selIdx);
           g_lastMarkerRegionId = m_overlappingRegionIds.Get()[selIdx];
-      }
+        }
 
-      if (g_lastMarkerRegionId <= 0 && m_overlappingRegionIds.GetSize() > 0) {
-        int selIdx = m_cbRegion.GetCurSel2();
-        if (selIdx < 0) selIdx = 0;
-        g_lastMarkerRegionId = m_overlappingRegionIds.Get()[selIdx];
-      }
+        if (g_lastMarkerRegionId < 0 && m_overlappingRegionIds.GetSize() > 0) {
+          int selIdx = m_cbRegion.GetCurSel2();
+          if (selIdx < 0) selIdx = 0;
+          g_lastMarkerRegionId = m_overlappingRegionIds.Get()[selIdx];
+        }
 
-      if (g_locked && m_overlappingRegionIds.GetSize() > 0) {
-        int uniqueActorCount = 0;
-        int unknownActorCount = 0;
-        const char *firstActor = NULL;
-        for (int i = 0; i < m_overlappingRegionIds.GetSize(); i++) {
-          int regId = m_overlappingRegionIds.Get()[i];
-          for (int j = 0; j < g_pRegionSubs.Get()->GetSize(); j++) {
-            SNM_RegionSubtitle *sub = g_pRegionSubs.Get()->Get(j);
-            if (sub->GetId() == regId) {
-              const char *actor = sub->GetActor();
-              if (!actor || !*actor || !strcmp(actor, "?"))
-                unknownActorCount++;
-              if (!actor || !*actor) actor = "?";
-              if (!firstActor) {
-                firstActor = actor;
-                uniqueActorCount = 1;
-              } else if (strcmp(firstActor, actor)) {
-                uniqueActorCount = 2;
-              }
-              break;
+        if (g_locked) {
+          int uniqueActorCount = 0;
+          int unknownActorCount = 0;
+          const char *firstActor = NULL;
+          for (int i = 0; i < m_overlappingRegionIds.GetSize(); i++) {
+            SNM_RegionSubtitle *sub = subs->Get(m_overlappingRegionIds.Get()[i]);
+            const char *actor = sub->GetActor();
+            if (!actor || !*actor || !strcmp(actor, "?"))
+              unknownActorCount++;
+            if (!actor || !*actor) actor = "?";
+            if (!firstActor) {
+              firstActor = actor;
+              uniqueActorCount = 1;
+            } else if (strcmp(firstActor, actor)) {
+              uniqueActorCount = 2;
             }
           }
-        }
-        bool showDefaultPrefix = uniqueActorCount >= 2 || unknownActorCount >= 2;
+          bool showDefaultPrefix = uniqueActorCount >= 2 || unknownActorCount >= 2;
 
-        WDL_FastString displayText;
-        bool first = true;
-        for (int i = 0; i < m_overlappingRegionIds.GetSize(); i++) {
-          int regId = m_overlappingRegionIds.Get()[i];
-          for (int j = 0; j < g_pRegionSubs.Get()->GetSize(); j++) {
-            SNM_RegionSubtitle *sub = g_pRegionSubs.Get()->Get(j);
-            if (sub->GetId() == regId) {
-              if (!first)
-                displayText.Append("\r\n");
-              const char *actor = sub->GetActor();
-              bool hasActor = actor && *actor && strcmp(actor, "?");
-              if (hasActor || showDefaultPrefix)
-                AppendDisplayLine(&displayText, hasActor ? actor : "?", sub->GetNotes());
-              else
-                displayText.Append(sub->GetNotes());
-              first = false;
-              break;
-            }
+          WDL_FastString displayText;
+          bool first = true;
+          for (int i = 0; i < m_overlappingRegionIds.GetSize(); i++) {
+            SNM_RegionSubtitle *sub = subs->Get(m_overlappingRegionIds.Get()[i]);
+            if (!first)
+              displayText.Append("\r\n");
+            const char *actor = sub->GetActor();
+            bool hasActor = actor && *actor && strcmp(actor, "?");
+            if (hasActor || showDefaultPrefix)
+              AppendDisplayLine(&displayText, hasActor ? actor : "?", sub->GetNotes());
+            else
+              displayText.Append(sub->GetNotes());
+            first = false;
           }
-        }
-        SetText(displayText.Get());
-      } else if (g_lastMarkerRegionId > 0) {
-        bool found = false;
-        for (int i = 0; i < g_pRegionSubs.Get()->GetSize(); i++) {
-          SNM_RegionSubtitle *sub = g_pRegionSubs.Get()->Get(i);
-          if (sub->GetId() == g_lastMarkerRegionId) {
+          SetText(displayText.Get());
+        } else if (g_lastMarkerRegionId >= 0) {
+          SNM_RegionSubtitle *sub = subs->Get(g_lastMarkerRegionId);
+          if (sub)
             SetText(sub->GetNotes());
-            found = true;
-            break;
+        }
+        refreshType = REQUEST_REFRESH;
+      } else if (g_lastMarkerRegionId >= 0 || *g_lastText) {
+        g_lastMarkerPos = -1.0;
+        g_lastMarkerRegionId = -1;
+        m_overlappingRegionIds.Resize(0);
+        m_cbRegion.Empty();
+        SetText("");
+        refreshType = REQUEST_REFRESH;
+      }
+    } else {
+      int id, idx = FindMarkerRegion(NULL, dPos, SNM_REGION_MASK, &id);
+      if (id > 0) {
+        WDL_TypedBuf<int> newOverlappingIds;
+        int enumIdx = 0;
+        bool isRgn;
+        double p1, p2;
+        int num;
+        while ((enumIdx = EnumProjectMarkers2(NULL, enumIdx, &isRgn, &p1, &p2, NULL, &num))) {
+          if (isRgn && dPos >= p1 && dPos <= p2) {
+            int regionId = MakeMarkerRegionId(num, true);
+            for (int i = 0; i < g_pRegionSubs.Get()->GetSize(); i++) {
+              if (g_pRegionSubs.Get()->Get(i)->GetId() == regionId) {
+                newOverlappingIds.Add(regionId);
+                break;
+              }
+            }
           }
         }
-        if (!found) {
-          g_pRegionSubs.Get()->Add(new SNM_RegionSubtitle(nullptr, id, ""));
+
+        bool regionsChanged = false;
+        if (newOverlappingIds.GetSize() != m_overlappingRegionIds.GetSize())
+          regionsChanged = true;
+        else {
+          for (int i = 0; i < newOverlappingIds.GetSize(); i++) {
+            if (newOverlappingIds.Get()[i] != m_overlappingRegionIds.Get()[i]) {
+              regionsChanged = true;
+              break;
+            }
+          }
+        }
+
+        if (regionsChanged) {
+          m_overlappingRegionIds.Resize(newOverlappingIds.GetSize());
+          memcpy(m_overlappingRegionIds.Get(),
+                 newOverlappingIds.Get(),
+                 newOverlappingIds.GetSize() * sizeof(int));
+
+          m_cbRegion.Empty();
+          for (int i = 0; i < m_overlappingRegionIds.GetSize(); i++) {
+            int regId = m_overlappingRegionIds.Get()[i];
+            for (int j = 0; j < g_pRegionSubs.Get()->GetSize(); j++) {
+              SNM_RegionSubtitle *sub = g_pRegionSubs.Get()->Get(j);
+              if (sub->GetId() == regId) {
+                char itemText[256];
+                const char *actor = sub->GetActor();
+                if (actor && *actor)
+                  snprintf(itemText, sizeof(itemText), "%s", actor);
+                else {
+                  double pos, end;
+                  int num;
+                  if (EnumMarkerRegionById(NULL, regId, NULL, &pos, &end, NULL, &num, NULL) >= 0)
+                    snprintf(itemText, sizeof(itemText), "R%d", num);
+                  else
+                    snprintf(itemText, sizeof(itemText), "Region %d", i + 1);
+                }
+                m_cbRegion.AddItem(itemText);
+                break;
+              }
+            }
+          }
+
+          int selIdx = 0;
+          for (int i = 0; i < m_overlappingRegionIds.GetSize(); i++) {
+            if (m_overlappingRegionIds.Get()[i] == g_lastMarkerRegionId) {
+              selIdx = i;
+              break;
+            }
+          }
+          m_cbRegion.SetCurSel2(selIdx);
+
+          if (m_overlappingRegionIds.GetSize() > 0)
+            g_lastMarkerRegionId = m_overlappingRegionIds.Get()[selIdx];
+        }
+
+        if (g_lastMarkerRegionId <= 0 && m_overlappingRegionIds.GetSize() > 0) {
+          int selIdx = m_cbRegion.GetCurSel2();
+          if (selIdx < 0) selIdx = 0;
+          g_lastMarkerRegionId = m_overlappingRegionIds.Get()[selIdx];
+        }
+
+        if (g_locked && m_overlappingRegionIds.GetSize() > 0) {
+          int uniqueActorCount = 0;
+          int unknownActorCount = 0;
+          const char *firstActor = NULL;
+          for (int i = 0; i < m_overlappingRegionIds.GetSize(); i++) {
+            int regId = m_overlappingRegionIds.Get()[i];
+            for (int j = 0; j < g_pRegionSubs.Get()->GetSize(); j++) {
+              SNM_RegionSubtitle *sub = g_pRegionSubs.Get()->Get(j);
+              if (sub->GetId() == regId) {
+                const char *actor = sub->GetActor();
+                if (!actor || !*actor || !strcmp(actor, "?"))
+                  unknownActorCount++;
+                if (!actor || !*actor) actor = "?";
+                if (!firstActor) {
+                  firstActor = actor;
+                  uniqueActorCount = 1;
+                } else if (strcmp(firstActor, actor)) {
+                  uniqueActorCount = 2;
+                }
+                break;
+              }
+            }
+          }
+          bool showDefaultPrefix = uniqueActorCount >= 2 || unknownActorCount >= 2;
+
+          WDL_FastString displayText;
+          bool first = true;
+          for (int i = 0; i < m_overlappingRegionIds.GetSize(); i++) {
+            int regId = m_overlappingRegionIds.Get()[i];
+            for (int j = 0; j < g_pRegionSubs.Get()->GetSize(); j++) {
+              SNM_RegionSubtitle *sub = g_pRegionSubs.Get()->Get(j);
+              if (sub->GetId() == regId) {
+                if (!first)
+                  displayText.Append("\r\n");
+                const char *actor = sub->GetActor();
+                bool hasActor = actor && *actor && strcmp(actor, "?");
+                if (hasActor || showDefaultPrefix)
+                  AppendDisplayLine(&displayText, hasActor ? actor : "?", sub->GetNotes());
+                else
+                  displayText.Append(sub->GetNotes());
+                first = false;
+                break;
+              }
+            }
+          }
+          SetText(displayText.Get());
+        } else if (g_lastMarkerRegionId > 0) {
+          bool found = false;
+          for (int i = 0; i < g_pRegionSubs.Get()->GetSize(); i++) {
+            SNM_RegionSubtitle *sub = g_pRegionSubs.Get()->Get(i);
+            if (sub->GetId() == g_lastMarkerRegionId) {
+              SetText(sub->GetNotes());
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            SetText("");
+          }
+        } else {
           SetText("");
         }
-      } else {
-        g_pRegionSubs.Get()->Add(new SNM_RegionSubtitle(nullptr, id, ""));
+        refreshType = REQUEST_REFRESH;
+      } else if (g_lastMarkerRegionId > 0 || *g_lastText) {
+        g_lastMarkerPos = -1.0;
+        g_lastMarkerRegionId = -1;
+        m_overlappingRegionIds.Resize(0);
+        m_cbRegion.Empty();
         SetText("");
+        refreshType = REQUEST_REFRESH;
       }
-      refreshType = REQUEST_REFRESH;
-    } else if (g_lastMarkerRegionId > 0 || *g_lastText) {
-      g_lastMarkerPos = -1.0;
-      g_lastMarkerRegionId = -1;
-      m_overlappingRegionIds.Resize(0);
-      m_cbRegion.Empty();
-      SetText("");
-      refreshType = REQUEST_REFRESH;
     }
   }
   return refreshType;
@@ -1768,23 +2118,30 @@ void NotesWnd::ForceUpdateRgnSub() {
     int uniqueActorCount = 0;
     int unknownActorCount = 0;
     const char *firstActor = NULL;
+    WDL_PtrList_DOD<SNM_RegionSubtitle> *subs = g_pRegionSubs.Get();
     for (int i = 0; i < m_overlappingRegionIds.GetSize(); i++) {
-      int regId = m_overlappingRegionIds.Get()[i];
-      for (int j = 0; j < g_pRegionSubs.Get()->GetSize(); j++) {
-        SNM_RegionSubtitle *sub = g_pRegionSubs.Get()->Get(j);
-        if (sub->GetId() == regId) {
-          const char *actor = sub->GetActor();
-          if (!actor || !*actor || !strcmp(actor, "?"))
-            unknownActorCount++;
-          if (!actor || !*actor) actor = "?";
-          if (!firstActor) {
-            firstActor = actor;
-            uniqueActorCount = 1;
-          } else if (strcmp(firstActor, actor)) {
-            uniqueActorCount = 2;
+      SNM_RegionSubtitle *sub = NULL;
+      if (g_hideRegions) {
+        sub = subs->Get(m_overlappingRegionIds.Get()[i]);
+      } else {
+        int regId = m_overlappingRegionIds.Get()[i];
+        for (int j = 0; j < subs->GetSize(); j++) {
+          if (subs->Get(j)->GetId() == regId) {
+            sub = subs->Get(j);
+            break;
           }
-          break;
         }
+      }
+      if (!sub) continue;
+      const char *actor = sub->GetActor();
+      if (!actor || !*actor || !strcmp(actor, "?"))
+        unknownActorCount++;
+      if (!actor || !*actor) actor = "?";
+      if (!firstActor) {
+        firstActor = actor;
+        uniqueActorCount = 1;
+      } else if (strcmp(firstActor, actor)) {
+        uniqueActorCount = 2;
       }
     }
     bool showDefaultPrefix = uniqueActorCount >= 2 || unknownActorCount >= 2;
@@ -1792,33 +2149,48 @@ void NotesWnd::ForceUpdateRgnSub() {
     WDL_FastString displayText;
     bool first = true;
     for (int i = 0; i < m_overlappingRegionIds.GetSize(); i++) {
-      int regId = m_overlappingRegionIds.Get()[i];
-      for (int j = 0; j < g_pRegionSubs.Get()->GetSize(); j++) {
-        SNM_RegionSubtitle *sub = g_pRegionSubs.Get()->Get(j);
-        if (sub->GetId() == regId) {
-          if (!first)
-            displayText.Append("\r\n");
-          const char *actor = sub->GetActor();
-          bool hasActor = actor && *actor && strcmp(actor, "?");
-          if (hasActor || showDefaultPrefix)
-            AppendDisplayLine(&displayText, hasActor ? actor : "?", sub->GetNotes());
-          else
-            displayText.Append(sub->GetNotes());
-          first = false;
-          break;
+      SNM_RegionSubtitle *sub = NULL;
+      if (g_hideRegions) {
+        sub = subs->Get(m_overlappingRegionIds.Get()[i]);
+      } else {
+        int regId = m_overlappingRegionIds.Get()[i];
+        for (int j = 0; j < subs->GetSize(); j++) {
+          if (subs->Get(j)->GetId() == regId) {
+            sub = subs->Get(j);
+            break;
+          }
         }
       }
+      if (!sub) continue;
+      if (!first)
+        displayText.Append("\r\n");
+      const char *actor = sub->GetActor();
+      bool hasActor = actor && *actor && strcmp(actor, "?");
+      if (hasActor || showDefaultPrefix)
+        AppendDisplayLine(&displayText, hasActor ? actor : "?", sub->GetNotes());
+      else
+        displayText.Append(sub->GetNotes());
+      first = false;
     }
     SetText(displayText.Get());
     RefreshGUI();
-  } else if (g_lastMarkerRegionId > 0) {
-    for (int i = 0; i < g_pRegionSubs.Get()->GetSize(); i++) {
-      SNM_RegionSubtitle *sub = g_pRegionSubs.Get()->Get(i);
-      if (sub->GetId() == g_lastMarkerRegionId) {
+  } else if (g_hideRegions ? g_lastMarkerRegionId >= 0 : g_lastMarkerRegionId > 0) {
+    if (g_hideRegions) {
+      SNM_RegionSubtitle *sub = g_pRegionSubs.Get()->Get(g_lastMarkerRegionId);
+      if (sub) {
         SetText(sub->GetNotes());
         if (g_locked)
           RefreshGUI();
-        break;
+      }
+    } else {
+      for (int i = 0; i < g_pRegionSubs.Get()->GetSize(); i++) {
+        SNM_RegionSubtitle *sub = g_pRegionSubs.Get()->Get(i);
+        if (sub->GetId() == g_lastMarkerRegionId) {
+          SetText(sub->GetNotes());
+          if (g_locked)
+            RefreshGUI();
+          break;
+        }
       }
     }
   }
@@ -1884,6 +2256,11 @@ bool GetNotesChunkFromString(const char *_bufIn,
 ///////////////////////////////////////////////////////////////////////////////
 
 void NotesUpdateJob::Perform() {
+  if (g_pendingRegionRecreation) {
+    g_pendingRegionRecreation = false;
+    if (!g_hideRegions)
+      ShowAllRegions();
+  }
   if (NotesWnd *w = g_notesWndMgr.Get())
     w->Update(true);
 }
@@ -2179,6 +2556,8 @@ void ActorListView::OnItemClk(SWS_ListItem *item, int iCol, int iKeyState) {
     }
   }
 
+  if (g_hideRegions)
+    g_lastMarkerPos = -1.0;
   Update();
 }
 
@@ -2398,24 +2777,33 @@ bool ImportAssFile(const char *_fn) {
       double startTime = p1[0] * 3600 + p1[1] * 60 + p1[2] + double(p1cs) / 100;
       double endTime = p2[0] * 3600 + p2[1] * 60 + p2[2] + double(p2cs) / 100;
 
-      int color = g_coloredRegions ? actorObj->GetEffectiveColor() : 0;
-      int num = AddProjectMarker2(NULL,
-                                  true,
-                                  startTime,
-                                  endTime,
-                                  name.Get(),
-                                  -1,
-                                  color);
-      if (num >= 0) {
+      if (g_hideRegions) {
+        SNM_RegionSubtitle *sub = new SNM_RegionSubtitle(nullptr, -1, notes.Get());
+        sub->SetActor(actor.Get());
+        sub->SetTimes(startTime, endTime);
+        g_pRegionSubs.Get()->Add(sub);
         ok = true;
-        if (firstPos < 0.0)
-          firstPos = startTime;
-        int id = MakeMarkerRegionId(num, true);
-        if (id > 0) {
-          SNM_RegionSubtitle *sub = new SNM_RegionSubtitle(nullptr, id, notes.Get());
-          sub->SetActor(actor.Get());
-          sub->SetTimes(startTime, endTime);
-          g_pRegionSubs.Get()->Add(sub);
+        if (firstPos < 0.0) firstPos = startTime;
+      } else {
+        int color = g_coloredRegions ? actorObj->GetEffectiveColor() : 0;
+        int num = AddProjectMarker2(NULL,
+                                    true,
+                                    startTime,
+                                    endTime,
+                                    name.Get(),
+                                    -1,
+                                    color);
+        if (num >= 0) {
+          ok = true;
+          if (firstPos < 0.0)
+            firstPos = startTime;
+          int id = MakeMarkerRegionId(num, true);
+          if (id > 0) {
+            SNM_RegionSubtitle *sub = new SNM_RegionSubtitle(nullptr, id, notes.Get());
+            sub->SetActor(actor.Get());
+            sub->SetTimes(startTime, endTime);
+            g_pRegionSubs.Get()->Add(sub);
+          }
         }
       }
     }
@@ -2423,7 +2811,8 @@ bool ImportAssFile(const char *_fn) {
   }
 
   if (ok) {
-    UpdateTimeline();
+    if (!g_hideRegions)
+      UpdateTimeline();
     if (firstPos > 0.0)
       SetEditCurPos2(NULL, firstPos, true, false);
   }
@@ -2471,24 +2860,35 @@ bool ImportSubRipFile(const char *_fn) {
           double startTime = p1[0] * 3600 + p1[1] * 60 + p1[2] + double(p1[3]) / 1000;
           double endTime = p2[0] * 3600 + p2[1] * 60 + p2[2] + double(p2[3]) / 1000;
 
-          int color = g_coloredRegions ? actorObj->GetEffectiveColor() : 0;
-          num = AddProjectMarker2(NULL,
-                                  true,
-                                  startTime,
-                                  endTime,
-                                  name.Get(),
-                                  num,
-                                  color);
+          if (g_hideRegions) {
+            SNM_RegionSubtitle *sub = new SNM_RegionSubtitle(nullptr, -1, notes.Get(), "?");
+            sub->SetTimes(startTime, endTime);
+            g_pRegionSubs.Get()->Add(sub);
+            ok = true;
+            if (firstPos < 0.0) firstPos = startTime;
+          } else {
+            int color = g_coloredRegions ? actorObj->GetEffectiveColor() : 0;
+            num = AddProjectMarker2(NULL,
+                                    true,
+                                    startTime,
+                                    endTime,
+                                    name.Get(),
+                                    num,
+                                    color);
 
-          if (num >= 0) {
-            ok = true; // region added (at least)
+            if (num >= 0) {
+              ok = true;
 
-            if (firstPos < 0.0)
-              firstPos = startTime;
+              if (firstPos < 0.0)
+                firstPos = startTime;
 
-            int id = MakeMarkerRegionId(num, true);
-            if (id > 0) // add the sub, no duplicate mgmt..
-              g_pRegionSubs.Get()->Add(new SNM_RegionSubtitle(nullptr, id, notes.Get(), "?"));
+              int id = MakeMarkerRegionId(num, true);
+              if (id > 0) {
+                SNM_RegionSubtitle *sub = new SNM_RegionSubtitle(nullptr, id, notes.Get(), "?");
+                sub->SetTimes(startTime, endTime);
+                g_pRegionSubs.Get()->Add(sub);
+              }
+            }
           }
         } else
           break;
@@ -2498,7 +2898,8 @@ bool ImportSubRipFile(const char *_fn) {
   }
 
   if (ok) {
-    UpdateTimeline(); // redraw the ruler (andd arrange view)
+    if (!g_hideRegions)
+      UpdateTimeline();
     if (firstPos > 0.0)
       SetEditCurPos2(NULL, firstPos, true, false);
   }
@@ -2529,6 +2930,50 @@ void ImportSubTitleFile(COMMAND_T *_ct) {
                  MB_OK);
     free(fn);
   }
+}
+
+void NotesWnd::OnDroppedFiles(HDROP h) {
+  if (g_notesType != SNM_NOTES_RGN_SUB) {
+    DragFinish(h);
+    return;
+  }
+  int iFiles = DragQueryFile(h, 0xFFFFFFFF, NULL, 0);
+  bool imported = false;
+  for (int i = 0; i < iFiles; i++) {
+    char fn[SNM_MAX_PATH] = "";
+    DragQueryFile(h, i, fn, sizeof(fn));
+    if (HasFileExtension(fn, "ASS")) {
+      if (ImportAssFile(fn)) imported = true;
+      lstrcpyn(g_lastImportSubFn, fn, sizeof(g_lastImportSubFn));
+    } else if (HasFileExtension(fn, "SRT")) {
+      if (ImportSubRipFile(fn)) imported = true;
+      lstrcpyn(g_lastImportSubFn, fn, sizeof(g_lastImportSubFn));
+    } else if (HasFileExtension(fn, "ROLES")) {
+      if (ImportRolesFile(fn)) {
+        lstrcpyn(g_lastRolesFn, fn, sizeof(g_lastRolesFn));
+        UpdateRegionColors();
+        RefreshActorList();
+        ForceUpdateRgnSub();
+        RefreshGUI();
+        MarkProjectDirty(NULL);
+      } else {
+        MessageBox(GetMainHwnd(),
+                   __LOCALIZE("Некорректный файл ролёвки!", "sws_DLG_152"),
+                   __LOCALIZE("ReNotes - Ошибка", "sws_DLG_152"),
+                   MB_OK);
+      }
+    } else {
+      MessageBox(GetMainHwnd(),
+                 __LOCALIZE("Некорректный файл субтитров!", "sws_DLG_152"),
+                 __LOCALIZE("ReNotes - Ошибка", "sws_DLG_152"),
+                 MB_OK);
+    }
+  }
+  if (imported) {
+    MarkProjectDirty(NULL);
+    RefreshActorList();
+  }
+  DragFinish(h);
 }
 
 bool ExportRolesFile(const char *fn) {
@@ -2615,21 +3060,12 @@ bool ImportRolesFile(const char *fn) {
   if (!f)
     return false;
 
-  g_importedRoleActors.Get()->Empty(true);
-
-  WDL_PtrList_DOD<SNM_Actor> *actors = g_actors.Get();
-  for (int i = 0; i < actors->GetSize(); i++) {
-    SNM_Actor *a = actors->Get(i);
-    a->SetLinkedActorName("");
-    a->SetHasCustomColor(false);
-    a->SetColor(GenerateActorColor(a->GetName()));
-  }
-
   enum { SECTION_NONE, SECTION_LINKED, SECTION_CHARACTER };
   int sectionType = SECTION_NONE;
   WDL_FastString sectionName;
   int parsedColor = 0;
   bool hasColor = false;
+  bool stateCleared = false;
   WDL_PtrList_DOD<WDL_FastString> charNames;
 
   auto applySection = [&]() {
@@ -2677,6 +3113,17 @@ bool ImportRolesFile(const char *fn) {
       continue;
 
     if (*line == '[') {
+      if (!stateCleared) {
+        g_importedRoleActors.Get()->Empty(true);
+        WDL_PtrList_DOD<SNM_Actor> *actors = g_actors.Get();
+        for (int i = 0; i < actors->GetSize(); i++) {
+          SNM_Actor *a = actors->Get(i);
+          a->SetLinkedActorName("");
+          a->SetHasCustomColor(false);
+          a->SetColor(GenerateActorColor(a->GetName()));
+        }
+        stateCleared = true;
+      }
       applySection();
 
       charNames.Empty(true);
@@ -2724,6 +3171,11 @@ bool ImportRolesFile(const char *fn) {
     } else if (_stricmp(line, "character") == 0 && *value) {
       charNames.Add(new WDL_FastString(value));
     }
+  }
+
+  if (!stateCleared) {
+    fclose(f);
+    return false;
   }
 
   applySection();
@@ -2944,6 +3396,7 @@ static void SaveExtensionConfig(ProjectStateContext *ctx,
 }
 
 static void BeginLoadProjectState(bool isUndo, struct project_config_extension_t *reg) {
+  g_pendingRegionRecreation = !isUndo;
   g_prjNotes.Cleanup();
   g_prjNotes.Get()->Set("");
 
@@ -2956,6 +3409,7 @@ static void BeginLoadProjectState(bool isUndo, struct project_config_extension_t
   g_actors.Cleanup();
   g_actors.Get()->Empty(true);
   g_importedRoleActors.Cleanup();
+  g_importedRoleActors.Get()->Empty(true);
 
   // g_globalNotes is loaded in NotesInit()
 }
@@ -3000,6 +3454,8 @@ int NotesInit() {
     1);
   g_displayActorInPrefix =
       (GetPrivateProfileInt(NOTES_INI_SEC, "DisplayActorInPrefix", 1, g_SNM_IniFn.Get()) == 1);
+  g_hideRegions = (GetPrivateProfileInt(NOTES_INI_SEC, "HideRegions", 0, g_SNM_IniFn.Get()) == 1);
+  g_hideActorList = (GetPrivateProfileInt(NOTES_INI_SEC, "HideActorList", 0, g_SNM_IniFn.Get()) == 1);
 
   WDL_FastString filePath;
   filePath.SetFormatted(SNM_MAX_PATH, "%s/SWS_Global ReNotes.txt", GetResourcePath());
@@ -3039,6 +3495,14 @@ void NotesExit() {
   WritePrivateProfileString(NOTES_INI_SEC,
                             "DisplayActorInPrefix",
                             g_displayActorInPrefix ? "1" : "0",
+                            g_SNM_IniFn.Get());
+  WritePrivateProfileString(NOTES_INI_SEC,
+                            "HideRegions",
+                            g_hideRegions ? "1" : "0",
+                            g_SNM_IniFn.Get());
+  WritePrivateProfileString(NOTES_INI_SEC,
+                            "HideActorList",
+                            g_hideActorList ? "1" : "0",
                             g_SNM_IniFn.Get());
 
   g_notesWndMgr.Delete();
@@ -3088,6 +3552,56 @@ int IsColoredRegions(COMMAND_T *) {
   return g_coloredRegions;
 }
 
+void HideAllRegions() {
+  WDL_PtrList_DOD<SNM_RegionSubtitle> *subs = g_pRegionSubs.Get();
+  PreventUIRefresh(1);
+  for (int i = 0; i < subs->GetSize(); i++) {
+    SNM_RegionSubtitle *sub = subs->Get(i);
+    if (sub->IsValid()) {
+      double pos, endPos;
+      if (EnumMarkerRegionById(NULL, sub->GetId(), NULL, &pos, &endPos, NULL, NULL, NULL) >= 0)
+        sub->SetTimes(pos, endPos);
+      int idx = GetMarkerRegionIndexFromId(NULL, sub->GetId());
+      if (idx >= 0)
+        DeleteProjectMarkerByIndex(NULL, idx);
+      sub->SetId(-1);
+    }
+  }
+  PreventUIRefresh(-1);
+}
+
+void ShowAllRegions() {
+  WDL_PtrList_DOD<SNM_Actor> *actors = g_actors.Get();
+  PreventUIRefresh(1);
+  for (int i = 0; i < actors->GetSize(); i++) {
+    if (actors->Get(i)->IsEnabled())
+      RecreateActorRegions(actors->Get(i)->GetName());
+  }
+  PreventUIRefresh(-1);
+}
+
+void ToggleHideRegions(COMMAND_T *) {
+  g_hideRegions = !g_hideRegions;
+  if (g_hideRegions)
+    HideAllRegions();
+  else
+    ShowAllRegions();
+  g_lastMarkerPos = -1.0;
+  UpdateTimeline();
+  if (NotesWnd *w = g_notesWndMgr.Get())
+    w->RefreshGUI();
+}
+
+void ToggleHideActorList(COMMAND_T *) {
+  g_hideActorList = !g_hideActorList;
+  if (NotesWnd *w = g_notesWndMgr.Get()) {
+    HWND hwnd = w->GetHWND();
+    RECT r;
+    GetClientRect(hwnd, &r);
+    SendMessage(hwnd, WM_SIZE, SIZE_RESTORED, MAKELPARAM(r.right, r.bottom));
+  }
+}
+
 void ClearAllSubtitlesAction(COMMAND_T *) {
   ClearAllSubtitles();
   if (NotesWnd *w = g_notesWndMgr.Get()) {
@@ -3105,6 +3619,8 @@ void EnableAllActors(COMMAND_T *) {
       RecreateActorRegions(actor->GetName());
     }
   }
+  if (g_hideRegions)
+    g_lastMarkerPos = -1.0;
   if (NotesWnd *w = g_notesWndMgr.Get())
     w->RefreshActorList();
 }
@@ -3119,13 +3635,15 @@ void DisableAllActors(COMMAND_T *) {
     }
   }
   UpdateTimeline();
+  if (g_hideRegions)
+    g_lastMarkerPos = -1.0;
   if (NotesWnd *w = g_notesWndMgr.Get())
     w->RefreshActorList();
 }
 
 void ImportRolesAction(COMMAND_T *) {
   if (char *fn = BrowseForFiles(
-    __LOCALIZE("ReNotes - Импорт ролей", "sws_DLG_152"),
+    __LOCALIZE("ReNotes - Импорт ролёвки", "sws_DLG_152"),
     g_lastRolesFn,
     NULL,
     false,
@@ -3141,7 +3659,7 @@ void ImportRolesAction(COMMAND_T *) {
       MarkProjectDirty(NULL);
     } else
       MessageBox(GetMainHwnd(),
-                 __LOCALIZE("Не удалось импортировать файл ролей.", "sws_DLG_152"),
+                 __LOCALIZE("Некорректный файл ролёвки!", "sws_DLG_152"),
                  __LOCALIZE("ReNotes - Ошибка", "sws_DLG_152"),
                  MB_OK);
     free(fn);
@@ -3169,7 +3687,7 @@ void ExportRolesAction(COMMAND_T *) {
   }
   char fn[SNM_MAX_PATH] = "";
   if (BrowseForSaveFile(
-    __LOCALIZE("ReNotes - Экспорт ролей", "sws_DLG_152"),
+    __LOCALIZE("ReNotes - Экспорт ролёвки", "sws_DLG_152"),
     g_lastRolesFn,
     NULL,
     SNM_ROLES_EXT_LIST,
@@ -3178,7 +3696,7 @@ void ExportRolesAction(COMMAND_T *) {
     lstrcpyn(g_lastRolesFn, fn, sizeof(g_lastRolesFn));
     if (!ExportRolesFile(fn))
       MessageBox(GetMainHwnd(),
-                 __LOCALIZE("Не удалось экспортировать роли.", "sws_DLG_152"),
+                 __LOCALIZE("Не удалось экспортировать ролёвку.", "sws_DLG_152"),
                  __LOCALIZE("ReNotes - Ошибка", "sws_DLG_152"),
                  MB_OK);
   }

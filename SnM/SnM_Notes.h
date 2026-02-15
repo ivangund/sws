@@ -213,7 +213,9 @@ class NotesWnd: public SWS_DockWnd {
   protected:
     void OnInitDlg();
     void OnDestroy();
+    void OnDroppedFiles(HDROP h);
     bool IsActive(bool bWantEdit = false);
+    bool ReprocessContextMenu() override { return false; }
     HMENU OnContextMenu(int x, int y, bool *wantDefaultItems);
     int OnKey(MSG *msg, int iKeyState);
     void OnTimer(WPARAM wParam = 0);
@@ -260,6 +262,9 @@ void DisableAllActors(COMMAND_T *);
 void ImportRolesAction(COMMAND_T *);
 void ExportRolesAction(COMMAND_T *);
 void WriteGlobalNotesToFile();
+
+extern bool g_hideRegions;
+extern bool g_hideActorList;
 
 // ReaScript export
 const char *NF_GetSWSTrackNotes(MediaTrack *);
