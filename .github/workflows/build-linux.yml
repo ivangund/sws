@@ -2,28 +2,11 @@ name: Build Linux
 
 on:
   workflow_call:
-    inputs:
-      arch:
-        required: true
-        type: string
   workflow_dispatch:
-    inputs:
-      arch:
-        description: Architecture
-        required: true
-        type: choice
-        default: x86_64
-        options:
-          - x86_64
-          - i686
-          - aarch64
-          - armv7l
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-    env:
-      ARCH: ${{ inputs.arch }}
 
     steps:
       - uses: actions/checkout@v4
@@ -33,57 +16,13 @@ jobs:
       - name: Install dependencies
         run: |
           set -e
-
-          sudo sed -i '/arch=/! s/^deb/deb [arch=amd64,i386]/' /etc/apt/sources.list
-          awk '
-          $3 !~ /ubuntu\.com/ { next }
-          $1 == "deb" {
-            $2 = "[arch=armhf,arm64]";
-            $3 = "http://ports.ubuntu.com/ubuntu-ports/"
-          } 1' /etc/apt/sources.list | sudo tee /etc/apt/sources.list.d/ports.list > /dev/null
-
-          install_deps() {
-            local arch="$1"; shift
-            local native=("$@" php-cli)
-            local target=(libgtk-3-dev)
-
-            sudo dpkg --add-architecture "$arch"
-            sudo apt-get update -qq
-            sudo apt-get install -qq -y ${native[@]} ${target[@]/%/:$arch} > /dev/null
-          }
-
-          case $ARCH in
-          x86_64)
-            install_deps amd64
-            ;;
-          i686)
-            install_deps i386 g++-multilib
-            ;;
-          armv7l)
-            install_deps armhf g++-arm-linux-gnueabihf
-            ;;
-          aarch64)
-            install_deps arm64 g++-aarch64-linux-gnu
-            ;;
-          esac
+          sudo apt-get update -qq
+          sudo apt-get install -qq -y php-cli libgtk-3-dev > /dev/null
 
       - name: Configure
         run: |
           mkdir build && cd build
-
-          case $ARCH in
-          i686)
-            export TOOLCHAIN=../cmake/linux-cross.cmake TOOLCHAIN_PREFIX=i386-linux-gnu
-            ;;
-          armv7l)
-            export TOOLCHAIN=../cmake/linux-cross.cmake TOOLCHAIN_PREFIX=arm-linux-gnueabihf
-            ;;
-          aarch64)
-            export TOOLCHAIN=../cmake/linux-cross.cmake TOOLCHAIN_PREFIX=aarch64-linux-gnu
-            ;;
-          esac
-
-          cmake .. -DCMAKE_BUILD_TYPE=Release ${TOOLCHAIN:+-DCMAKE_TOOLCHAIN_FILE=$TOOLCHAIN}
+          cmake .. -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
         run: cmake --build build
@@ -91,5 +30,5 @@ jobs:
       - name: Upload plugin
         uses: actions/upload-artifact@v4
         with:
-          name: reaper_sws-${{ inputs.arch }}-linux
+          name: reaper_sws-x86_64-linux
           path: build/reaper_sws*.so

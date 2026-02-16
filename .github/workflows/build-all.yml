@@ -5,12 +5,7 @@ on:
 
 jobs:
   build-linux:
-    strategy:
-      matrix:
-        arch: [x86_64, i686, aarch64, armv7l]
     uses: ./.github/workflows/build-linux.yml
-    with:
-      arch: ${{ matrix.arch }}
 
   build-macos:
     strategy:
@@ -21,12 +16,7 @@ jobs:
       arch: ${{ matrix.arch }}
 
   build-windows:
-    strategy:
-      matrix:
-        arch: [x86_64, i686]
     uses: ./.github/workflows/build-windows.yml
-    with:
-      arch: ${{ matrix.arch }}
 
   package:
     needs: [build-linux, build-macos, build-windows]
