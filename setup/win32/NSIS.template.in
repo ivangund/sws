@@ -94,10 +94,8 @@ Function CheckResourcePath
 FunctionEnd
 
 Function CheckNotRunning
-  nsProcessW::_FindProcess "reaper.exe"
-  Pop $R0
-
-  StrCmp $R0 "0" 0 +3
+  FindWindow $R0 "REAPERwnd"
+  StrCmp $R0 0 +3
     MessageBox MB_OK|MB_ICONSTOP \
       "Please close all instances of REAPER before continuing the installation."
     Abort

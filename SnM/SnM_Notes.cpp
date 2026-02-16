@@ -198,7 +198,9 @@ void NotesWnd::OnInitDlg() {
   m_resize.init_item(IDC_EDIT1, 0.0, 0.0, 1.0, 1.0);
   m_resize.init_item(IDC_EDIT2, 0.0, 0.0, 1.0, 1.0);
 
+#ifdef _WIN32
   DragAcceptFiles(m_hwnd, TRUE);
+#endif
 
   SetWrapText(g_wrapText);
 
@@ -1188,6 +1190,7 @@ int NotesWnd::OnKey(MSG *_msg, int _iKeyState) {
             if (!editFocused) { OnCommand(COPY_CURRENT_PHRASE_MSG, 0); return 1; }
             break;
           case 'V':
+#ifdef _WIN32
             if (IsClipboardFormatAvailable(CF_HDROP)) {
               if (OpenClipboard(m_hwnd)) {
                 HANDLE hDrop = GetClipboardData(CF_HDROP);
@@ -1241,6 +1244,7 @@ int NotesWnd::OnKey(MSG *_msg, int _iKeyState) {
               }
               return 1;
             }
+#endif
             break;
         }
       }
