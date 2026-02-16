@@ -261,6 +261,14 @@ void EnableAllActors(COMMAND_T *);
 void DisableAllActors(COMMAND_T *);
 void ImportRolesAction(COMMAND_T *);
 void ExportRolesAction(COMMAND_T *);
+void ToggleHideRegions(COMMAND_T *);
+int IsHideRegions(COMMAND_T *);
+void ToggleHideActorList(COMMAND_T *);
+int IsHideActorList(COMMAND_T *);
+void ToggleDisplayActorInPrefix(COMMAND_T *);
+int IsDisplayActorInPrefix(COMMAND_T *);
+void CopyMarkersAction(COMMAND_T *);
+void CopyRoleDistributionAction(COMMAND_T *);
 void WriteGlobalNotesToFile();
 
 extern bool g_hideRegions;

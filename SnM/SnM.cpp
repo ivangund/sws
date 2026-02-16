@@ -1015,6 +1015,26 @@ static COMMAND_T s_cmdTable[] =
     {DEFACCEL, "SWS/S&M: ReNotes - Экспортировать ролёвку"}, "S&M_EXPORT_ROLES",
     ExportRolesAction, NULL,
   },
+  {
+    {DEFACCEL, "SWS/S&M: ReNotes - Переключить скрытие регионов"}, "S&M_TOGGLE_HIDE_REGIONS",
+    ToggleHideRegions, NULL, 0, IsHideRegions
+  },
+  {
+    {DEFACCEL, "SWS/S&M: ReNotes - Переключить скрытие ролёвки"}, "S&M_TOGGLE_HIDE_ACTOR_LIST",
+    ToggleHideActorList, NULL, 0, IsHideActorList
+  },
+  {
+    {DEFACCEL, "SWS/S&M: ReNotes - Переключить отображение актёра в префиксе"},
+    "S&M_TOGGLE_ACTOR_PREFIX", ToggleDisplayActorInPrefix, NULL, 0, IsDisplayActorInPrefix
+  },
+  {
+    {DEFACCEL, "SWS/S&M: ReNotes - Скопировать маркеры в буфер обмена"}, "S&M_COPY_RGN_MARKERS",
+    CopyMarkersAction, NULL,
+  },
+  {
+    {DEFACCEL, "SWS/S&M: ReNotes - Скопировать ролёвку в буфер обмена"},
+    "S&M_COPY_ROLE_DISTRIBUTION", CopyRoleDistributionAction, NULL,
+  },
 
   // Split ------------------------------------------------------------------
   {

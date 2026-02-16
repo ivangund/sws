@@ -123,8 +123,6 @@ void ClearAllSubtitles();
 void UpdateRegionColors();
 void HideAllRegions();
 void ShowAllRegions();
-void ToggleHideRegions(COMMAND_T *);
-void ToggleHideActorList(COMMAND_T *);
 bool ExportRolesFile(const char *fn);
 bool ImportRolesFile(const char *fn);
 
@@ -786,10 +784,7 @@ void NotesWnd::OnCommand(WPARAM wParam, LPARAM lParam) {
       ToggleHideActorList(NULL);
       break;
     case DISPLAY_ACTOR_PREFIX_MSG:
-      g_displayActorInPrefix = !g_displayActorInPrefix;
-      UpdateRegionColors();
-      ForceUpdateRgnSub();
-      RefreshGUI();
+      ToggleDisplayActorInPrefix(NULL);
       break;
     case ENABLE_ALL_MSG:
       EnableAllActors(NULL);
@@ -866,53 +861,9 @@ void NotesWnd::OnCommand(WPARAM wParam, LPARAM lParam) {
         CF_SetClipboard(output.Get());
     }
     break;
-    case COPY_ROLE_DISTRIBUTION_MSG: {
-      WDL_PtrList_DOD<SNM_Actor> *actors = g_actors.Get();
-
-      WDL_PtrList_DOD<WDL_FastString> linkedNames;
-      WDL_PtrList_DOD<WDL_FastString> charLists;
-
-      for (int i = 0; i < actors->GetSize(); i++) {
-        SNM_Actor *a = actors->Get(i);
-        if (!a->HasLinkedActor()) continue;
-
-        const char *linked = a->GetLinkedActorName();
-        int idx = -1;
-        for (int j = 0; j < linkedNames.GetSize(); j++) {
-          if (!strcmp(linkedNames.Get(j)->Get(), linked)) {
-            idx = j;
-            break;
-          }
-        }
-        if (idx < 0) {
-          linkedNames.Add(new WDL_FastString(linked));
-          charLists.Add(new WDL_FastString());
-          idx = linkedNames.GetSize() - 1;
-        }
-        charLists.Get(idx)->AppendFormatted(512, "- %s\n", a->GetName());
-      }
-
-      if (!linkedNames.GetSize()) {
-        MessageBox(GetHWND(),
-                   __LOCALIZE("Нет привязанных актёров.", "sws_DLG_152"),
-                   __LOCALIZE("ReNotes", "sws_DLG_152"),
-                   MB_OK);
-        break;
-      }
-
-      WDL_FastString output;
-      for (int i = 0; i < linkedNames.GetSize(); i++) {
-        if (i > 0) output.Append("\n");
-        output.AppendFormatted(512, "%s:\n", linkedNames.Get(i)->Get());
-        output.Append(charLists.Get(i)->Get());
-      }
-
-      if (output.GetLength() > 0 && output.Get()[output.GetLength() - 1] == '\n')
-        output.DeleteSub(output.GetLength() - 1, 1);
-
-      CF_SetClipboard(output.Get());
-    }
-    break;
+    case COPY_ROLE_DISTRIBUTION_MSG:
+      CopyRoleDistributionAction(NULL);
+      break;
     case CMBID_TYPE:
       if (HIWORD(wParam) == CBN_SELCHANGE) {
         SetType(m_cbType.GetCurSel2());
@@ -3600,6 +3551,71 @@ void ToggleHideActorList(COMMAND_T *) {
     GetClientRect(hwnd, &r);
     SendMessage(hwnd, WM_SIZE, SIZE_RESTORED, MAKELPARAM(r.right, r.bottom));
   }
+}
+
+void ToggleDisplayActorInPrefix(COMMAND_T *) {
+  g_displayActorInPrefix = !g_displayActorInPrefix;
+  UpdateRegionColors();
+  if (NotesWnd *w = g_notesWndMgr.Get()) {
+    w->ForceUpdateRgnSub();
+    w->RefreshGUI();
+  }
+}
+
+int IsHideRegions(COMMAND_T *) {
+  return g_hideRegions;
+}
+
+int IsHideActorList(COMMAND_T *) {
+  return g_hideActorList;
+}
+
+int IsDisplayActorInPrefix(COMMAND_T *) {
+  return g_displayActorInPrefix;
+}
+
+void CopyMarkersAction(COMMAND_T *) {
+  CopyMarkersToClipboard(GetMainHwnd());
+}
+
+void CopyRoleDistributionAction(COMMAND_T *) {
+  WDL_PtrList_DOD<SNM_Actor> *actors = g_actors.Get();
+  WDL_PtrList_DOD<WDL_FastString> linkedNames;
+  WDL_PtrList_DOD<WDL_FastString> charLists;
+  for (int i = 0; i < actors->GetSize(); i++) {
+    SNM_Actor *a = actors->Get(i);
+    if (!a->HasLinkedActor()) continue;
+    const char *linked = a->GetLinkedActorName();
+    int idx = -1;
+    for (int j = 0; j < linkedNames.GetSize(); j++) {
+      if (!strcmp(linkedNames.Get(j)->Get(), linked)) {
+        idx = j;
+        break;
+      }
+    }
+    if (idx < 0) {
+      linkedNames.Add(new WDL_FastString(linked));
+      charLists.Add(new WDL_FastString());
+      idx = linkedNames.GetSize() - 1;
+    }
+    charLists.Get(idx)->AppendFormatted(512, "- %s\n", a->GetName());
+  }
+  if (!linkedNames.GetSize()) {
+    MessageBox(GetMainHwnd(),
+               __LOCALIZE("Нет привязанных актёров.", "sws_DLG_152"),
+               __LOCALIZE("ReNotes", "sws_DLG_152"),
+               MB_OK);
+    return;
+  }
+  WDL_FastString output;
+  for (int i = 0; i < linkedNames.GetSize(); i++) {
+    if (i > 0) output.Append("\n");
+    output.AppendFormatted(512, "%s:\n", linkedNames.Get(i)->Get());
+    output.Append(charLists.Get(i)->Get());
+  }
+  if (output.GetLength() > 0 && output.Get()[output.GetLength() - 1] == '\n')
+    output.DeleteSub(output.GetLength() - 1, 1);
+  CF_SetClipboard(output.Get());
 }
 
 void ClearAllSubtitlesAction(COMMAND_T *) {
