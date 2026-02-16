@@ -1,0 +1,59 @@
+name: Build Windows
+
+on:
+  workflow_call:
+    inputs:
+      arch:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: Architecture
+        required: true
+        type: choice
+        default: x86_64
+        options:
+          - x86_64
+          - i686
+
+jobs:
+  build:
+    runs-on: windows-2022
+    env:
+      ARCH: ${{ inputs.arch }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: choco install php nsis --yes
+
+      - name: Configure
+        shell: bash
+        run: |
+          CMAKE_ARCH=$( [ "$ARCH" = "x86_64" ] && echo "x64" || echo "Win32" )
+
+          mkdir build && cd build
+          cmake .. -G "Visual Studio 17 2022" -A "$CMAKE_ARCH" \
+            -DCMAKE_BUILD_TYPE=Release -DBUILD_SWS_PYTHON=NO
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Create installer
+        run: cd build && cpack -G NSIS -C Release
+
+      - name: Upload plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: reaper_sws-${{ inputs.arch }}-windows
+          path: build/reaper_sws*.dll
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: reaper_sws-${{ inputs.arch }}-windows-installer
+          path: build/sws-*.exe

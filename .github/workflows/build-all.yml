@@ -1,0 +1,50 @@
+name: Build All Platforms
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    strategy:
+      matrix:
+        arch: [x86_64, i686, aarch64, armv7l]
+    uses: ./.github/workflows/build-linux.yml
+    with:
+      arch: ${{ matrix.arch }}
+
+  build-macos:
+    strategy:
+      matrix:
+        arch: [arm64, x86_64]
+    uses: ./.github/workflows/build-macos.yml
+    with:
+      arch: ${{ matrix.arch }}
+
+  build-windows:
+    strategy:
+      matrix:
+        arch: [x86_64, i686]
+    uses: ./.github/workflows/build-windows.yml
+    with:
+      arch: ${{ matrix.arch }}
+
+  package:
+    needs: [build-linux, build-macos, build-windows]
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create combined archive
+        run: |
+          cd artifacts
+          tar czf ../sws-all-platforms.tar.gz .
+
+      - name: Upload combined archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: sws-all-platforms
+          path: sws-all-platforms.tar.gz

@@ -1,6 +1,11 @@
 name: Build Linux
 
 on:
+  workflow_call:
+    inputs:
+      arch:
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       arch:
